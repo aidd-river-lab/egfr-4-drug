@@ -1,0 +1,12 @@
+# .venv310 的真实安装记录，供复现参考。不要直接 pip install -r 这个文件——
+# vina 在PyPI上没有macOS wheel，必须用 scripts/setup_docking_env.sh 从源码编译
+# (该脚本会处理Boost路径/C++标准/swig这几个真实的坑)。这个文件只是版本参考。
+rdkit==2026.3.6
+pandas==2.3.3
+numpy==2.2.6
+scipy==1.15.3
+PyYAML==6.0.3
+gemmi==0.7.5
+meeko==0.8.0
+vina==1.2.7  # 从源码编译，见 scripts/setup_docking_env.sh
+pymysql==1.2.3

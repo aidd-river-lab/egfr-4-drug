@@ -64,6 +64,24 @@ E3配体的真实性已核实：来那度胺(C13H13N3O3，MW 259.26)、泊马度
 1个warhead × 5个linker × 2个E3配体 = 10个候选，全部验证连通
 (`tests/test_route_b_rgroup_libraries.py` + `tests/test_enumerate_bifunctional.py`)。
 
+## 2026-10补充：E3配体的真实Ki找到了，warhead的Kd还没有
+
+查文献确认了来那度胺/泊马度胺对CRBN的真实结合常数：**来那度胺Ki≈3.1 μM
+(3100 nM)，泊马度胺Ki≈0.8 μM(800 nM)**(不同assay格式下数值有一定差异，
+这在该领域是常态，不是数据矛盾)。这意味着`core/ternary_complex.py::
+evaluate_hook_effect_risk()`现在可以用**真实的E3配体侧Kd**跑：
+
+```python
+evaluate_hook_effect_risk(warhead_kd_nm=100, e3_ligand_kd_nm=3100, dose_range_nm=(10, 1000))
+```
+
+但`warhead_kd_nm`这一侧依然没有真实值——它需要warhead对突变EGFR的真实结合
+数据，来自环节4的对接/FEP(本环境工具链未装，诚实占位)，查文献也查不到
+(因为我们的warhead是从路线C demo骨架衍生出来的illustrative结构，不是
+已发表化合物)。**这是目前唯一真正卡住路线B决策阶段的缺口**：E3配体那一半
+数据是真的，warhead那一半还是假设值，hook effect可以演示逻辑但不能用于
+真实决策。
+
 ## 运行
 
 ```bash

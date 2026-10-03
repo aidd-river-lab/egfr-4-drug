@@ -1,12 +1,24 @@
 """
 环节4 L1-L2：快速对接 + 精细对接重打分
 
-!! 本模块依赖的 meeko / vina 在本仓库的开发环境里装不上，见 requirements.txt 的说明 !!
-  - meeko 需要 Python >= 3.10（本环境是3.9.6，meeko内部用了match语句）
-  - vina 需要系统预装 Boost C++ 库
-所以这里的函数都是"结构正确、可以读代码审查、但在当前环境跑不起来"的状态——
-用 lazy import 包起来，import 这个模块本身不会报错，只有真正调用函数、且环境里
-确实没装对应库时才会得到一个说明清楚的失败结果，不会半途崩溃也不会假装成功。
+!! 2026-10更新：meeko/vina 现在真的能跑了，不再是纯占位 !!
+主.venv(Python 3.9.6)确实装不了——meeko需要Python>=3.10，vina需要Boost。
+但这两个都不是"做不到"，是"需要另起一个环境"：见 `scripts/setup_docking_env.sh`，
+一键搭建`.venv310`(Python 3.10 + meeko + vina)。这个脚本里记录了三个真实踩过的坑：
+  1. vina的setup.py只在几个写死的路径找Boost，Apple Silicon上Homebrew装在
+     /opt/homebrew不在那几个路径里——用CONDA_PREFIX环境变量指向Homebrew的
+     boost前缀能让它的locate_boost()函数找到(真实生效，不是猜的)。
+  2. vina 1.2.7的C++代码写死`-std=c++11`编译，但较新的Boost(1.92+)用到了
+     C++14才有的类型别名，严格C++11模式编译会报错——把这个编译选项改成
+     `-std=c++17`就解决了。
+  3. 还需要额外装swig(生成Python绑定)。
+用这套环境已经对真实下载的PDB结构(5EHR/6LUD)跑通了端到端对接，产出了真实、
+有区分度的结合能分数(不是0.0也不是编的)，详见`doc/04-funnel-docking.md`和
+`doc/routes/route-a-shp2-sos1.md`/`route-c-4th-gen-tki.md`。
+
+本模块的函数本身(在主.venv下)依然用lazy import包起来——import这个模块不会报错，
+只有真正调用函数、且当前解释器没装对应库时才会得到一个说明清楚的失败结果，
+不会半途崩溃也不会假装成功。用`.venv310/bin/python`跑这些函数就是真实调用。
 
 这个模块存在的第二个目的：**修正 egfr-pipline 项目里的一个真实bug**。
 那个项目的 prepare_receptor_pdbqt() 实际是 `cp receptor.pdb receptor.pdbqt`——

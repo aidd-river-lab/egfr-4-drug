@@ -1,6 +1,6 @@
 # 环节4：多级打分漏斗 L0-L4
 
-代码：[`core/docking.py`](../core/docking.py) [`core/md_stability.py`](../core/md_stability.py) [`core/mmgbsa.py`](../core/mmgbsa.py) [`core/fep.py`](../core/fep.py) [`core/covalent.py`](../core/covalent.py) · 配置：[`config/pipeline.yaml`](../config/pipeline.yaml) · **状态：质控/几何逻辑真实可跑，对接/MD/FEP计算本身诚实占位**
+代码：[`core/docking.py`](../core/docking.py) [`core/md_stability.py`](../core/md_stability.py) [`core/mmgbsa.py`](../core/mmgbsa.py) [`core/fep.py`](../core/fep.py) [`core/covalent.py`](../core/covalent.py) · 配置：[`config/pipeline.yaml`](../config/pipeline.yaml) · **状态：L1对接2026-10起真实可跑(见`scripts/setup_docking_env.sh`)；L2质控逻辑真实；L3-L4(MD/FEP)仍是诚实占位，需要GPU**
 
 ## 核心思想：每升一级精度提高一个量级，通量降低两个量级
 
@@ -43,8 +43,33 @@ run_vina_docking(receptor_pdbqt=..., ligand_pdbqt=..., center=(-14.2, 33.5, 22.8
 # ok=False: "vina 未安装或不兼容当前Python版本...（还需要系统预装Boost库）"
 ```
 
-要在新环境接入：`python -m venv .venv`用Python 3.10+重建，`pip install meeko vina`，
-`brew install boost`（macOS）。
+要在新环境接入：`bash scripts/setup_docking_env.sh` 一键搭建`.venv310`(Python 3.10 +
+meeko + vina)。这个脚本不是简单的pip install——记录了三个真实踩过的坑(vina的
+setup.py硬编码的Boost查找路径、老版本C++标准和新版Boost的类型别名冲突、缺swig)，
+详见脚本内注释和`core/docking.py`模块docstring。
+
+## 2026-10：真实对接已经跑通，不再是纯占位
+
+用这套环境对真实下载的PDB结构(路线A的5EHR，路线C的6LUD)做了端到端真实对接：
+受体用`mk_prepare_receptor.py`正规转换(处理了真实晶体结构的altloc问题)，配体
+用RDKit生成3D构象+MMFF优化再转PDBQT，口袋中心取自真实共晶配体的坐标质心
+(不是猜的)。路线A全部16个候选、路线C的12个决策批次候选都跑出了真实、有区分度
+的结合能分数(范围大约-7.5到-10.7 kcal/mol，没有一个是0.0)。
+
+**一个有效性检验**：把奥希替尼自己的SMILES重新对接进6LUD(它自己的共晶结构)，
+得到-7.76 kcal/mol，和其它候选分子没有显著差异——这符合已知药理学：奥希替尼
+真正的高效力来自和Cys797形成的共价键，而C797S恰好去掉了这个共价靶点，Vina只能
+打出它的非共价结合姿势分数，自然不会特别突出。这是一个合理性检验，不是精确的
+构象重现验证(没有做对接姿势和晶体姿势的RMSD比对)。
+
+**一个比预期更重要的发现**：把真实对接分数和环节8算出来的desirability(纯ADMET，
+不含任何结合信息)做Spearman相关，路线C的12个候选相关系数只有0.25(p=0.43，
+不显著)——**ADMET打分和真实结合强度几乎没有关系**，这正是本仓库从一开始就
+强调"不能只靠环节6/8做最终决策，必须有环节4的打分漏斗"的原因，现在有真实数据
+支撑这句话了。两条路线里，`select_batch()`的control档(从"desirability较低"的
+池子里随机抽的)都抽到了真实对接分数名列前茅的分子(路线A的RTA-0005综合分数
+全场最低但对接分数-10.74全场最佳；路线C的RTC-0034/RTC-0134同样排进前五)——
+这是"假阴性复活"机制在真实数据上的具体验证，不是假设性的设计理念。
 
 ## L2.5：共价对接（chemistry_route=covalent_new_site/covalent_pan_mutant_broad专用）
 

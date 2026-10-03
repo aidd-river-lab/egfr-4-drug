@@ -27,6 +27,80 @@ import pandas as pd
 
 
 # ------------------------------------------------------------
+# 环节2：structure_ensemble(core/structures.py StructureEnsembleMember)
+# ------------------------------------------------------------
+def upsert_structure_ensemble_member(conn, ensemble_id: str, member) -> None:
+    """
+    member: core.structures.StructureEnsembleMember实例。ensemble_id是独立参数
+    而不是member的字段——StructureEnsembleMember这个dataclass本身没有ensemble_id
+    (它描述的是"这个结构是哪来的"，ensemble_id是落库时业务层分配的标识，和
+    compounds.compound_id不来自core/standardize.py的StandardizeResult是同一个道理)。
+    """
+    sql = """
+        INSERT INTO structure_ensemble
+            (ensemble_id, genotype, source_pdb, mutation_method, md_trajectory_id,
+             cluster_occupancy_pct, prep_date, forcefield_version, local_path, notes)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            mutation_method = VALUES(mutation_method), local_path = VALUES(local_path),
+            notes = VALUES(notes), prep_date = VALUES(prep_date)
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            sql,
+            (
+                ensemble_id,
+                member.genotype,
+                member.source_pdb,
+                member.mutation_method,
+                member.md_trajectory_id,
+                member.cluster_occupancy_pct,
+                member.prep_date,
+                member.forcefield_version,
+                member.local_path,
+                member.notes,
+            ),
+        )
+
+
+def upsert_funnel_score(
+    conn,
+    compound_id: str,
+    ensemble_id: str,
+    funnel_level: str,
+    method: str,
+    score_value: float | None,
+    error_estimate_kcal_mol: float | None = None,
+    n_poses_or_frames: int | None = None,
+    passed_filter: bool | None = None,
+    raw_output_path: str | None = None,
+) -> None:
+    """
+    L0-L4任意一层的真实打分结果落库——2026-10之前这张表一直是空的(对接/MD/FEP
+    全部诚实占位)，直到装起了真实的meeko+vina环境(见scripts/setup_docking_env.sh)
+    才产出第一批真实L1对接分数，不是占位数值。
+    """
+    sql = """
+        INSERT INTO funnel_scores
+            (compound_id, ensemble_id, funnel_level, method, score_value,
+             error_estimate_kcal_mol, n_poses_or_frames, passed_filter, raw_output_path)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            score_value = VALUES(score_value), error_estimate_kcal_mol = VALUES(error_estimate_kcal_mol),
+            n_poses_or_frames = VALUES(n_poses_or_frames), passed_filter = VALUES(passed_filter),
+            raw_output_path = VALUES(raw_output_path)
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            sql,
+            (
+                compound_id, ensemble_id, funnel_level, method, score_value,
+                error_estimate_kcal_mol, n_poses_or_frames, _bool_or_none(passed_filter), raw_output_path,
+            ),
+        )
+
+
+# ------------------------------------------------------------
 # 环节1：compounds / standardize_quarantine
 # ------------------------------------------------------------
 def _compound_rows(df: pd.DataFrame, route_id: str) -> list[tuple]:

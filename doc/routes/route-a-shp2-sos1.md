@@ -63,10 +63,31 @@ run(route_id='route_a_shp2_sos1', batch_size=10)
 | 必须联用 | 是，从立项起就是联用设计 | 可以单药，但联用也是大趋势 |
 | 复用的core/模块 | 100%复用，无需新增代码 | 原始实现 |
 
+## 2026-10补充：真实结构已下载
+
+`5EHR`(SHP099/SHP2，tunnel位点)和`6SCM`(BI-3406/SOS1，催化邻近口袋)已经
+实际下载+清洗(保留了共晶配体)，存在`routes/route_a_shp2_sos1/structures/`，
+并登记进数据库的`structure_ensemble`表。确认了配体HETATM确实存在
+(5EHR里的5OD=SHP099，23个重原子；6SCM里的L7H=BI-3406，58个重原子)，
+不是空结构。这是环节2到目前为止唯一有真实(非占位)产出的部分——因为SHP2/
+SOS1的真实共晶结构本身就存在，不像路线C的primary genotype那样连结构
+都没有(见`doc/routes/route-c-4th-gen-tki.md`的说明)。
+
+## 2026-10补充：L1真实对接已跑通，16个候选全部有真实结合能
+
+用`scripts/setup_docking_env.sh`搭的`.venv310`对全部16个demo候选跑了真实Vina
+对接(受体=5EHR，口袋中心取自SHP099的真实坐标质心)，结合能范围
+-7.73到-10.74 kcal/mol，全部持久化进`funnel_scores`表(funnel_level=L1)。
+**发现**：这批对接分数和环节8算出来的desirability(纯ADMET打分)的Spearman
+相关系数是0.83(p=0.04，6个样本)——比路线C的同类分析(见
+[doc/04-funnel-docking.md](../04-funnel-docking.md))相关性更强，但样本量太小
+(n=6)不能太当真。更可靠的信号是：`select_batch()`的control档(RTA-0005，
+desirability全场最低)真实对接分数反而是全场最佳(-10.74)——"假阴性复活"
+机制在真实数据上又验证了一次。
+
 ## 尚未做的事
 
-- 真实的5EHR/6SCM结构下载+清洗(`core/structures.py::fetch_pdb`已验证可用，
-  但本次构建没有实际跑，只是复用了路线C的验证记录)
+- L2精细重打分/共价对接(本路线不涉及共价，但可以用Gnina CNN rescoring)
 - 用TNO155/RMC-4630的已发表活性数据做FEP map的实验锚点校正
 - CYP/毒性谱/给药方案这三项联用TPP指标目前只有qualitative占位，需要接入
   真实CYP抑制预测模型

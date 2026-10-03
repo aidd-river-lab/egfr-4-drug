@@ -13,13 +13,13 @@ pytest>=8.0
 pymysql>=1.1
 sqlparse>=0.5  # 执行db/schema_mysql.sql这类多语句SQL文件时按语句切分用
 
-# ---- 以下为可选依赖，对应 core/docking.py / core/mmgbsa.py / core/fep.py ----
-# 本仓库当前开发环境无法安装，原因见 doc/04-funnel-docking.md 的"环境说明"：
-#   - meeko  需要 Python >= 3.10（本环境是 3.9.6，meeko 内部用了 match 语句）
-#   - vina   需要系统预装 Boost C++ 库（brew install boost / apt install libboost-all-dev）
-# 如果要在新环境里跑真实对接，建议用 Python 3.10+ 重建 venv 后再装：
-# meeko>=0.8
-# vina>=1.2.5
+# ---- 对接依赖：meeko/vina 需要 Python >= 3.10，装不进这个主.venv(3.9.6) ----
+# 2026-10更新：这两个库现在真的装起来了，不是放弃了——见独立的 .venv310，
+# 一键搭建命令: bash scripts/setup_docking_env.sh (记录了Boost路径/C++标准/swig
+# 三个真实踩过的坑，不是简单pip install)。requirements-docking.txt 列出该环境
+# 实际装的依赖版本，供参考/复现。
+# meeko
+# vina
 
 # ---- 以下为未来环节需要、但本仓库未尝试安装的重型依赖（需要 GPU/长耗时计算） ----
 # openmm             # MD 模拟，环节2结构库平衡 / 环节4 L3 MD稳定性

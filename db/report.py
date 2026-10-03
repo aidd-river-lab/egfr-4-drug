@@ -60,6 +60,23 @@ def print_route_report(conn, route_id: str) -> None:
         n_pass_cns = sum(1 for c in cns if c >= 4.0)
         print(f"CNS MPO >= 4.0 的候选: {n_pass_cns}/{len(cns)}")
 
+    # 真实L1对接分数(2026-10起可用，见scripts/setup_docking_env.sh)
+    docked = _fetch_dicts(
+        cur,
+        "SELECT f.compound_id, f.ensemble_id, f.score_value FROM funnel_scores f "
+        "JOIN compounds c ON f.compound_id = c.compound_id WHERE c.route_id = %s AND f.funnel_level = 'L1' "
+        "ORDER BY f.score_value",
+        (route_id,),
+    )
+    if docked:
+        scores = [d["score_value"] for d in docked]
+        print(f"\n真实L1对接(AutoDock Vina, ensemble={docked[0]['ensemble_id']}): "
+              f"{len(docked)}个候选，结合能范围 {min(scores):.2f} ~ {max(scores):.2f} kcal/mol")
+        print(f"  最佳: {docked[0]['compound_id']} ({docked[0]['score_value']:.2f})， "
+              f"最弱: {docked[-1]['compound_id']} ({docked[-1]['score_value']:.2f})")
+    else:
+        print("\n还没有真实L1对接数据——用 scripts/setup_docking_env.sh 搭环境后跑 scripts/batch_dock.py")
+
     # 决策批次(路线A/C才有；路线B目前没有决策阶段)
     rounds = _fetch_dicts(
         cur, "SELECT * FROM decision_rounds WHERE round_id LIKE %s ORDER BY round_date DESC LIMIT 1", (f"{route_id}%",)
@@ -76,10 +93,11 @@ def print_route_report(conn, route_id: str) -> None:
         cur,
         """
         SELECT m.compound_id, m.batch_role, m.is_pareto_optimal, m.desirability_score,
-               a.mw, a.cns_mpo, s.sa_score
+               a.mw, a.cns_mpo, s.sa_score, f.score_value AS dock_score
         FROM decision_batch_members m
         JOIN admet_descriptors a ON m.compound_id = a.compound_id
         LEFT JOIN synthesis_records s ON m.compound_id = s.compound_id
+        LEFT JOIN funnel_scores f ON m.compound_id = f.compound_id AND f.funnel_level = 'L1'
         WHERE m.round_id = %s
         ORDER BY FIELD(m.batch_role, 'exploit', 'explore', 'hypothesis_test', 'control'), m.desirability_score DESC
         """,
@@ -98,9 +116,10 @@ def print_route_report(conn, route_id: str) -> None:
             print(f"\n  [{role_explain.get(role, role)}]")
             seen_roles.add(role)
         pareto_tag = "Pareto最优" if m["is_pareto_optimal"] else ""
+        dock_str = f"真实对接={m['dock_score']:.2f}" if m["dock_score"] is not None else "无对接数据"
         print(
             f"    {m['compound_id']}: desirability={m['desirability_score']:.3f} "
-            f"MW={m['mw']:.0f} CNS_MPO={m['cns_mpo']:.2f} SA_score={m['sa_score']:.2f} {pareto_tag}"
+            f"MW={m['mw']:.0f} CNS_MPO={m['cns_mpo']:.2f} SA_score={m['sa_score']:.2f} {dock_str} {pareto_tag}"
         )
     cur.close()
 

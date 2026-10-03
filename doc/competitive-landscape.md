@@ -81,6 +81,45 @@
   活性良好，但PK性质(尤其是CNS穿透)往往跟不上"——这不是本仓库编的风险描述，
   是这个领域公认的技术瓶颈，也是`routes/route_b_degrader`把CNS Kp,uu提升为
   一级TPP指标的直接依据。
+- **来那度胺/泊马度胺对CRBN的真实结合常数**：来那度胺Ki≈3.1 μM，泊马度胺
+  Ki≈0.8 μM(不同assay格式下数值有差异，属于该领域常态)。已用于
+  `core/ternary_complex.py::evaluate_hook_effect_risk()`的真实数据演示，
+  见`doc/routes/route-b-degrader.md`。
+
+## 四.5、EGFR C797S真实晶体结构格局核查(比预想的更稀缺)
+
+- **del19/C797S(路线C primary genotype)没有任何晶体结构**——文献明确提到
+  del19/T790M/C797S三突变体"蛋白都没能纯化到结晶级别"。
+- **L858R/C797S双突变体(无T790M，路线C另一个primary genotype)也检索不到
+  任何PDB条目**。
+- 现有全部C797S相关晶体结构(**6LUD**/6LUB/9D3V/9D3W/9XU9/8WD4等)都是
+  L858R/T790M/C797S三突变体——也就是路线C的secondary genotype。
+  本仓库已下载**6LUD**(L858R/T790M/C797S + 奥希替尼本身的真实共晶，配体YY3
+  的37个重原子和奥希替尼C28H33N7O2精确吻合)，存在
+  `routes/route_c_4th_gen_tki/structures/`，并登记进数据库`structure_ensemble`表。
+- **路线A的SHP2/SOS1真实结构可以直接下载**：PDB 5EHR(SHP099/SHP2 tunnel
+  位点)、6SCM(BI-3406/SOS1)都已下载+清洗，配体HETATM(5OD/L7H)确认存在。
+  这是路线A相对路线C的一个具体优势——不需要先走计算突变这一步。
+
+## 四.6、拿真实上市/临床药物跑本仓库自己的ADMET流水线(验证计算工具本身可信度)
+
+用RDKit核对过SMILES与PubChem公开分子式精确匹配(奥希替尼C28H33N7O2/499.6，
+**tigozertinib(BLU-945) C28H37FN6O3S/556.7**，**silevertinib(BDTX-1535)
+C30H30ClFN6O2/561.05**)，跑了一遍`core/admet.py`/`core/synthesis.py`：
+
+| 化合物 | MW | CNS_MPO | SA score | hERG代理 |
+|---|---|---|---|---|
+| osimertinib | 499.6 | 2.25 | 2.92 | high |
+| tigozertinib(BLU-945) | 556.7 | 2.99 | 4.53 | **low** |
+| silevertinib(BDTX-1535) | 561.1 | 2.35 | 4.14 | high |
+
+意外但可解释的发现：tigozertinib是唯一hERG代理显示"low"的，因为它的哌啶
+氮直接连在嘧啶环上(芳香胺，不是经典烷基叔胺)，碱性被电子不足的杂环削弱，
+`core/admet.py`的`has_basic_aliphatic_amine`判断正确识别了这个差异——
+这和本仓库`pocket_regions.yaml`"solvent_exposed区域富集弱碱性替代物"的
+设计原则吻合，说明这条启发式规则抓住了真实的药物化学模式，不是凭空编的。
+详细解读(包括"不要被自己demo分子的CNS_MPO数字误导"这条重要警示)见
+`doc/routes/route-c-4th-gen-tki.md`。
 
 ## 五、三路线立项逻辑小结
 

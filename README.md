@@ -58,13 +58,15 @@ routes/                        路线专属配置，三条路线结构对称
     pipeline.yaml
     patent_landscape.yaml
     rgroup_libraries/
+  route_a_shp2_sos1/structures/   真实下载的PDB 5EHR/6SCM(含对接产物)
+  route_c_4th_gen_tki/structures/ 真实下载的PDB 6LUD(含对接产物)
 
 core/                           三路线共享的核心计算引擎
   standardize.py                   环节1 标准化 [真实可跑]
   structures.py                     环节2 结构系综 [下载/清洗真实，MD/突变占位]
   enumerate.py                       环节3 枚举 [真实可跑；固定骨架+R基团 / warhead-linker-E3两种拓扑]
   route_config.py                    路线配置路径解析(routes/<route_id>/config)
-  docking.py                         环节4 L1-L2 对接 [接口正确，meeko/vina未装，占位]
+  docking.py                         环节4 L1-L2 对接 [**L1真实可跑**，见.venv310，L2占位]
   covalent.py                        环节4.3 共价对接 [攻击角判据真实，对接本身占位]
   md_stability.py / mmgbsa.py        环节4 L3 MD/MM-GBSA [占位，需GPU]
   fep.py                              环节4 L4 FEP [qc_pass逻辑真实，FEP本身占位]
@@ -79,14 +81,20 @@ workflows/
   run_discovery_round.py          路线A/C共用：枚举->标准化->ADMET->决策
   run_bifunctional_round.py       路线B专属：三组分枚举->标准化->ADMET画像
 
+scripts/
+  setup_docking_env.sh             一键搭建.venv310(真实meeko+vina对接环境)
+  batch_dock.py                    批量对接脚本(需要.venv310)，算完直接落库funnel_scores
+
 tests/                           86个pytest单测，覆盖所有"真实可跑"模块+三路线配置校验+DB写入逻辑+关键回归场景
 db/
   schema_mysql.sql                MySQL schema(生产环境用这个)，三路线共用，靠route_id列区分
   schema.sql                      SQLite版，仅用于不想起MySQL server时的快速本地校验
   connect.py                       从.env读取凭证返回数据库连接
   repository.py                    workflows算出来的DataFrame -> 写入MySQL对应表(幂等upsert)
+  report.py                        把数据库结果整理成人读报告(.venv/bin/python -m db.report)
 
 .env.example                      数据库凭证模板，复制成.env填真实值(.env已在.gitignore里)
+requirements-docking.txt          .venv310的真实安装版本记录(参考用，不要直接pip install -r)
 
 doc/
   00-design-overview.md           总览：三路线对比 + 共享引擎架构
@@ -147,6 +155,23 @@ cp .env.example .env   # 填真实的 DB_HOST/DB_USER/DB_PASSWORD
 .venv/bin/python -m core.feedback
 .venv/bin/python -m core.ternary_complex
 .venv/bin/python -m core.route_config
+
+# 8. 真实对接(2026-10起可用，需要macOS+Homebrew，装进独立的.venv310不碰上面的.venv)
+bash scripts/setup_docking_env.sh
+.venv310/bin/python scripts/batch_dock.py <candidates.json> <receptor.pdbqt> <ensemble_id> <out_dir> <cx> <cy> <cz>
+```
+
+## 真实对接环境(.venv310)
+
+路线A(5EHR)和路线C(6LUD)已经用真实PDB结构跑通端到端Vina对接，不再是诚实占位——
+`funnel_scores`表里现在有28条真实结合能分数(路线A全部16个候选 + 路线C 12个
+决策批次候选)，范围-7.5到-10.7 kcal/mol。详细方法、踩过的坑(Boost路径/C++
+标准/swig)、以及一个重要发现(**真实对接分数和纯ADMET的desirability打分几乎
+不相关**，验证了"不能只靠ADMET决策"这条设计原则)见
+[doc/04-funnel-docking.md](doc/04-funnel-docking.md)。
+
+```bash
+bash scripts/setup_docking_env.sh    # 一键搭建，装Homebrew的python@3.10/boost/swig
 ```
 
 ## 数据库落库说明
