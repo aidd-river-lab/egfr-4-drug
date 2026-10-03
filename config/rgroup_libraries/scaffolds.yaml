@@ -1,0 +1,33 @@
+# ============================================================
+# 核心骨架模板（环节3.2 第1-2步）
+#
+# !! 重要声明 !!
+# 下面的骨架是**示例性的通用激酶抑制剂母核**(2-氨基嘧啶-联苯型)，
+# 用来演示"骨架+带方向标注的可变位点"这个数据结构怎么驱动 core/enumerate.py，
+# 不是照抄任何已知专利分子，也不是经过内部验证的起始点。
+# 真实项目的骨架必须来自环节3.1的四个真实来源(类似物枚举/片段重组/
+# 可购库/生成模型)，并经过药化确认。
+#
+# 连接点约定：用同位素标记的哑原子 [1*] [2*] [3*] ... 表示 R1/R2/R3...，
+# 必须和下面 attachment_points 里的 region 一一对应，core/enumerate.py
+# 按这个映射去 pocket_regions.yaml 里找对应区域的片段库。
+# ============================================================
+
+templates:
+  - id: "demo_aminopyrimidine_biphenyl"
+    status: "illustrative_only"
+    core_smiles: "[1*]c1ccc(Nc2nccc(-c3ccc([2*])cc3[3*])n2)cc1"
+    description: "2-氨基嘧啶铰链 + 联苯骨架，三个可变位点"
+    attachment_points:
+      - label: R1
+        isotope: 1
+        region: entrance_797
+        rationale: "靠近嘧啶铰链一侧的苯环对位，指向797入口区"
+      - label: R2
+        isotope: 2
+        region: hydrophobic_back_pocket
+        rationale: "远端苯环对位，指向门卫残基背后的疏水背袋"
+      - label: R3
+        isotope: 3
+        region: solvent_exposed
+        rationale: "远端苯环间位，指向溶剂暴露区，主导PK/hERG"

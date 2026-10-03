@@ -1,0 +1,194 @@
+# ============================================================
+# 唯一真相来源 (Single Source of Truth)
+# 所有下游的结构准备、打分权重、Go/No-Go 判据都从这个文件读取，
+# 不要在脚本里重复硬编码基因型或阈值——见设计文档「环节0」。
+# ============================================================
+
+project:
+  name: "EGFR C797S 第四代抑制剂"
+  design_doc: "doc/00-design-overview.md"
+  owner: "River"
+  last_updated: "2026-10-02"
+
+# ------------------------------------------------------------
+# 0.1 基因型清单：primary=主攻，secondary=次要覆盖，
+#     counter_screen=反靶点(选择性必须对它们好，不是对它们有效)
+# ------------------------------------------------------------
+genotypes:
+  primary:
+    - id: del19_C797S
+      label: "del19/C797S（无T790M）"
+      clinical_context: "一线即用奥希替尼耐药后，当前最大的病人群"
+      requires_t790m_tolerance: false
+      structure_bias: "αC-in"
+    - id: L858R_C797S
+      label: "L858R/C797S（无T790M）"
+      clinical_context: "一线即用奥希替尼耐药后"
+      requires_t790m_tolerance: false
+      structure_bias: "αC-out"
+
+  secondary:
+    - id: del19_T790M_C797S
+      label: "del19/T790M/C797S（三突变）"
+      clinical_context: "一代/二代序贯奥希替尼后耐药"
+      requires_t790m_tolerance: true
+      structure_bias: "αC-in"
+    - id: L858R_T790M_C797S
+      label: "L858R/T790M/C797S（三突变）"
+      clinical_context: "一代/二代序贯奥希替尼后耐药"
+      requires_t790m_tolerance: true
+      structure_bias: "αC-out"
+
+  counter_screen:
+    - id: EGFR_WT
+      label: "EGFR 野生型"
+      role: "反靶点：选择性分母，皮疹/腹泻剂量限制性毒性的来源"
+    - id: ERBB2
+      label: "HER2/ERBB2"
+      role: "脱靶参考（同家族）"
+    - id: ERBB4
+      label: "HER4/ERBB4"
+      role: "脱靶参考（同家族）"
+    - id: ITK
+      label: "ITK"
+      role: "脱靶参考（含可及Cys，共价路线重点）"
+    - id: BTK
+      label: "BTK"
+      role: "脱靶参考（含可及Cys，共价路线重点）"
+    - id: BMX
+      label: "BMX"
+      role: "脱靶参考（含可及Cys，共价路线重点）"
+    - id: TEC
+      label: "TEC"
+      role: "脱靶参考（含可及Cys，共价路线重点）"
+    - id: JAK3
+      label: "JAK3"
+      role: "脱靶参考（含可及Cys，共价路线重点）"
+    - id: BLK
+      label: "BLK"
+      role: "脱靶参考（含可及Cys，共价路线重点）"
+
+# ------------------------------------------------------------
+# 0.2 化学路线：当前主攻/备份，决定 core/covalent.py 是否启用
+# ------------------------------------------------------------
+chemistry_route:
+  primary: "A"  # A=可逆正构(ATP竞争) B=新位点共价 C=共价+非经典突变广谱 D=变构/降解剂
+  backup: "B"
+  notes: >
+    主攻 A 的理由：机制已被 silevertinib 临床验证（C797S 队列 ORR 约36%），
+    且 A 的主要难点(PK、WT选择性)恰好是计算化学能帮上忙的地方。
+    D 不要混进本管线——结构模板/细胞系/打分逻辑都不同，应作为独立项目。
+  covalent_warhead_enabled: false  # 路线A不需要；切到B/C时改true，core/covalent.py才会被workflow调用
+
+# ------------------------------------------------------------
+# 0.3 TPP（目标产品画像）：这张表就是整条管线的损失函数。
+#     每一行必须对应一个预测模型或一个实验终点，不允许有打分维度
+#     在这里找不到对应项——那是"自欺"的信号。
+# ------------------------------------------------------------
+tpp:
+  - metric: cell_ic50_del19_c797s_nm
+    label: "细胞活性 (Ba/F3 del19-C797S)"
+    minimum: 50
+    target: 10
+    direction: lower_is_better
+    unit: nM
+    computed_by: "FEP相对结合自由能 + 细胞pIC50模型"
+
+  - metric: cell_ic50_triple_mut_nm
+    label: "细胞活性 (del19/T790M/C797S)"
+    minimum: 100
+    target: 20
+    direction: lower_is_better
+    unit: nM
+    computed_by: "同上，另一套结构"
+
+  - metric: wt_selectivity_fold
+    label: "WT选择性 (A431 或 Ba/F3-WT)"
+    minimum: 20
+    target: 100
+    direction: higher_is_better
+    unit: "倍"
+    computed_by: "炼金突变ΔΔΔG，见core/selectivity.py"
+
+  - metric: kinome_s10nm
+    label: "激酶组选择性 S(10 nM)"
+    minimum: 0.05
+    target: 0.02
+    direction: lower_is_better
+    unit: ratio
+    computed_by: "泛激酶对接 + ML脱靶模型"
+
+  - metric: cns_kp_uu
+    label: "CNS渗透 Kp,uu"
+    minimum: 0.2
+    target: 0.3
+    direction: higher_is_better
+    unit: ratio
+    computed_by: "CNS MPO + MDR1-MDCK外排比"
+
+  - metric: oral_bioavailability_pct
+    label: "口服暴露 (大鼠 F%)"
+    minimum: 20
+    target: 40
+    direction: higher_is_better
+    unit: "%"
+    computed_by: "溶解度 + Caco-2 + 肝微粒体清除率"
+
+  - metric: herg_ic50_um
+    label: "hERG IC50"
+    minimum: 10
+    target: 30
+    direction: higher_is_better
+    unit: uM
+    computed_by: "hERG模型 + 碱性中心pKa控制"
+
+  - metric: molecular_weight
+    label: "分子量"
+    minimum: null
+    target: 520
+    maximum: 580
+    direction: lower_is_better
+    unit: Da
+    computed_by: "RDKit Descriptors.MolWt"
+
+  - metric: clogd74
+    label: "cLogD7.4"
+    minimum: 1.0
+    target: 2.25
+    maximum: 3.5
+    direction: in_range
+    unit: ratio
+    computed_by: "RDKit MolLogP 近似(见 core/admet.py 的说明)"
+
+  - metric: cns_mpo
+    label: "CNS MPO 复合分"
+    minimum: 3.0
+    target: 4.5
+    direction: higher_is_better
+    unit: score
+    computed_by: "core/admet.py compute_cns_mpo()（近似值，见该模块顶部声明）"
+
+  - metric: synthesis_n_steps
+    label: "合成步数(最长线性序列)"
+    minimum: null
+    target: 6
+    maximum: 10
+    direction: lower_is_better
+    unit: steps
+    computed_by: "core/synthesis.py SynthesisRecord.n_steps(需要AiZynthFinder或药化人工路线规划，暂无自动计算)"
+
+# ------------------------------------------------------------
+# 决策引擎(core/decide.py)读取这里的字段名来对齐 TPP —— 不要改字段名
+# 除非同步改 core/decide.py 里的 TPP_FIELD_MAP
+# ------------------------------------------------------------
+decision_engine:
+  pareto_objectives:
+    - cell_ic50_del19_c797s_nm
+    - wt_selectivity_fold
+    - cns_mpo
+    - synthesis_n_steps
+  batch_quota:
+    exploit_pct: 50
+    explore_pct: 25
+    hypothesis_test_pct: 15
+    control_pct: 10

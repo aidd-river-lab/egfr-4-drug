@@ -1,0 +1,109 @@
+# ============================================================
+# 多级打分漏斗配置（环节4.1）：每一级精度提高一个量级，通量降低两个量级。
+# L0/L1 的作用是排除，不是排名；只有 L3 之后的分数才能用来真正决定合成谁。
+# ============================================================
+
+funnel:
+  L0:
+    name: "药效团 + 形状匹配 + 属性过滤"
+    method: "pharmacophore_shape_match"
+    tools: ["ROCS", "Pharmit", "RDKit property filters"]
+    throughput_per_day: 100000000
+    error_kcal_mol: null
+    purpose: "从巨型库里切出约10^5量级，只做粗排除"
+    implemented_in: "core/enumerate.py 的属性过滤部分 + core/admet.py 的硬约束"
+
+  L1:
+    name: "快速对接"
+    method: "fast_docking"
+    tools: ["AutoDock Vina", "Gnina", "Glide SP"]
+    throughput_per_day: 500000
+    error_kcal_mol: 2.5
+    purpose: "砍掉明显不贴合的，只做排除不做排名"
+    decision_rule: "vina_score 仅用于排除(建议阈值在 pipeline.yaml 的 l1_exclude_above_kcal_mol)，不进入最终排序权重"
+    l1_exclude_above_kcal_mol: -6.0  # 比这个松(数值更大/更接近0)的直接排除，不代表"小于这个就是好分子"
+    implemented_in: "core/docking.py"
+
+  L2:
+    name: "精细对接 + 重打分"
+    method: "refined_docking_rescoring"
+    tools: ["Glide XP", "Gnina CNN rescoring", "共价对接(路线B/C)"]
+    throughput_per_day: 10000
+    error_kcal_mol: 2.0
+    purpose: "生成可信的结合构象，供L3使用"
+    implemented_in: "core/docking.py (非共价) / core/covalent.py (共价)"
+
+  L3:
+    name: "MM-GBSA + 短程MD稳定性"
+    method: "mmgbsa_md_stability"
+    tools: ["OpenMM", "GROMACS"]
+    throughput_per_day: 300
+    error_kcal_mol: 1.3
+    purpose: "排除'对接分高但结合不稳'的假阳性，性价比最高的一步"
+    md_length_ns: 20
+    md_replicas: 3
+    pass_criteria:
+      ligand_rmsd_last_15ns_mean_max_angstrom: 2.5
+      hinge_hbond_occupancy_min_pct: 60
+      target_anchor_occupancy_min_pct: 40
+      target_anchor_note: "C797S路线里target_anchor指Ser797-OG，但不是硬门槛，见下方 ser797_hbond_policy"
+    implemented_in: "core/md_stability.py / core/mmgbsa.py"
+
+  L4:
+    name: "FEP 相对结合自由能"
+    method: "fep"
+    tools: ["OpenFE", "FEP+", "Amber TI"]
+    throughput_per_day_per_gpu_node: 30  # 10-50对/天的中位数
+    error_kcal_mol: 0.75  # 0.5-1.0区间取中值
+    purpose: "同系列SAR的真正预测，决定合成哪个"
+    requires:
+      - "可靠的L3结合位姿"
+      - "每张map 2-3个已知活性化合物做实验锚点校正"
+    qc:
+      mue_reject_threshold_kcal_mol: 1.5  # 预测vs实测MUE超过这个值，整张map作废
+    implemented_in: "core/fep.py"
+
+# ------------------------------------------------------------
+# Ser797 氢键判据（环节4.2）：连续加分项，不是硬门槛
+# ------------------------------------------------------------
+ser797_hbond_policy:
+  is_hard_gate: false
+  max_score_weight_pct: 15
+  geometry:
+    donor_h_acceptor_distance_max_angstrom: 2.5
+    donor_h_acceptor_angle_min_degree: 130
+  must_use_md_occupancy: true  # 不能只看单帧对接位姿
+  note: >
+    C797S四代药的活性主要来自对整个ATP口袋的高亲和力贴合，与Ser797-OH直接氢键是加分项
+    不是必要条件。设成硬门槛会误杀好分子——这是致命坑清单的第10条。
+
+# ------------------------------------------------------------
+# 共价路线专用（环节4.3），仅当 target_profile.yaml 的
+# chemistry_route.covalent_warhead_enabled = true 时生效
+# ------------------------------------------------------------
+covalent_route:
+  attack_angle_bd_degree: 105  # Bürgi-Dunitz角
+  primary_endpoint: "kinact_over_KI"  # 不是IC50
+  warhead_reactivity_target:
+    gsh_half_life_hours_min: 1   # 太快(<0.5h)意味着高脱靶/高清除
+    gsh_half_life_hours_note: "丙烯酰胺类弹头通常希望GSH t1/2在数小时量级"
+
+# ------------------------------------------------------------
+# 多目标决策引擎配额（环节8.3），与 target_profile.yaml 的
+# decision_engine.batch_quota 保持一致——这里是执行细节，那边是比例
+# ------------------------------------------------------------
+batch_composition:
+  typical_batch_size: 40  # 20-60区间取中值
+  roles:
+    exploit:
+      pct: 50
+      acquisition_function: "max_expected_utility"
+    explore:
+      pct: 25
+      acquisition_function: "max_variance_ucb"
+    hypothesis_test:
+      pct: 15
+      selection: "药化指定的matched molecular pair"
+    control:
+      pct: 10
+      selection: "已知化合物复测 + 规则误杀复活名单随机抽样"

@@ -1,0 +1,24 @@
+# 核心依赖：在本仓库的 .venv (Python 3.9.6) 下已验证可安装、可导入
+rdkit>=2025.9
+pandas>=2.3
+numpy>=2.0
+pydantic>=2.13
+scipy>=1.13
+PyYAML>=6.0
+
+# 开发/测试依赖
+pytest>=8.0
+
+# ---- 以下为可选依赖，对应 core/docking.py / core/mmgbsa.py / core/fep.py ----
+# 本仓库当前开发环境无法安装，原因见 doc/04-funnel-docking.md 的"环境说明"：
+#   - meeko  需要 Python >= 3.10（本环境是 3.9.6，meeko 内部用了 match 语句）
+#   - vina   需要系统预装 Boost C++ 库（brew install boost / apt install libboost-all-dev）
+# 如果要在新环境里跑真实对接，建议用 Python 3.10+ 重建 venv 后再装：
+# meeko>=0.8
+# vina>=1.2.5
+
+# ---- 以下为未来环节需要、但本仓库未尝试安装的重型依赖（需要 GPU/长耗时计算） ----
+# openmm             # MD 模拟，环节2结构库平衡 / 环节4 L3 MD稳定性
+# openfe             # FEP 相对结合自由能，环节4 L4 / 环节5 选择性引擎
+# aizynthfinder      # 计算机逆合成，环节7
+# chemprop           # ADMET 预测模型，环节6（需要内部训练数据）

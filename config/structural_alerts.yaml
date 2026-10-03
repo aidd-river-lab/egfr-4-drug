@@ -1,0 +1,120 @@
+# ============================================================
+# 结构警示库（环节6.3）
+# 每条规则都已经用 RDKit 针对正/负对照分子验证过 SMARTS 语法和匹配行为
+# （验证脚本见 tests/test_structural_alerts.py），不是手写猜的。
+#
+# 字段说明：
+#   smarts        : 触发警示的基础子结构
+#   exempt_if     : 命中基础 smarts 后，如果还命中这里任意一条，则视为"已掩蔽"豁免
+#   severity      : low / medium / high
+#   action        : PASS（不会出现在这里，豁免后直接不算命中）/
+#                   OPTIMIZE_NEEDED（三态里的中间态，提示但不拒绝）/
+#                   REJECT（硬拒绝）
+#   advice        : 给药化看的具体建议
+#   precision_note: 当前已知的精度边界 —— 按设计文档"环节9.3"的要求，
+#                   每条规则必须记录它的历史命中率/假阳性率；这里先用
+#                   "已验证的正负对照分子"代替，真实命中率需要跑过内部数据后回填
+# ============================================================
+
+rules:
+  aniline_unmasked:
+    smarts: "[NX3;H2,H1;!$(N[C,S]=[O,S,N])]c1ccccc1"
+    exempt_if:
+      - "[NX3]c1ccc([F,Cl,$(C(F)(F)F),$(S(=O)(=O))])cc1"   # 对位吸电子基团掩蔽
+      - "[NX3]c1cc([F,Cl])ccc1"                             # 邻位卤素掩蔽
+      - "[NX3]c1ncccn1"                                      # 2-氨基嘧啶型铰链胺(奥希替尼/吉非替尼等通用基序)
+      - "[NX3]c1ncccc1"                                      # 2-氨基吡啶型铰链胺
+      - "[NX3]c1nc2ccccc2[nH]1"                              # 苯并咪唑型
+    severity: high
+    action: OPTIMIZE_NEEDED
+    advice: "苯胺未掩蔽，存在代谢活化为醌亚胺的特异质肝毒性风险。建议对位引入 -F/-Cl/-CF3，或将氮酰化。"
+    precision_note: >
+      已验证: 对 Nc1ccccc1 命中, 对 CC(=O)Nc1ccccc1(酰胺化)/对位或邻位卤代苯胺不命中。
+      已验证不对激酶铰链区常见的2-氨基嘧啶/2-氨基吡啶基序(奥希替尼、吉非替尼、厄洛替尼同款母核)
+      误报——这类基序在临床已大量验证安全，是ATP口袋铰链氢键的标准设计元素，不是"未掩蔽苯胺"风险。
+      尚未覆盖: 其他杂环铰链胺变体(如氨基嘧啶并吡啶)，遇到新骨架先人工复核再决定是否扩充豁免清单。
+
+  nitroaromatic:
+    smarts: "c[N+](=O)[O-]"
+    exempt_if: []
+    severity: high
+    action: REJECT
+    advice: "硝基芳烃可被还原活化，有致突变/遗传毒性风险，直接替换为其他给电子/吸电子基团。"
+    precision_note: "已验证: 对硝基苯命中，对脂肪族硝基(如硝基乙烷)不命中(脂肪族硝基风险机制不同，本规则不覆盖)。"
+
+  furan_alpha_unsubstituted:
+    smarts: "[cH]1[cH][cH][cH]o1"
+    exempt_if: []
+    severity: medium
+    action: OPTIMIZE_NEEDED
+    advice: "α位未取代的呋喃可被CYP氧化为环氧/烯二酮活性中间体。若非必需，优先换成取代呋喃或其他杂环。"
+    precision_note: "已验证: 对未取代呋喃命中，对2-甲基呋喃(α位已取代)不命中。只检查'4个环碳全部是CH'这种最保守的情形，3取代呋喃可能漏判，需要后续补充。"
+
+  thiophene_alpha_unsubstituted:
+    smarts: "[cH]1[cH][cH][cH]s1"
+    exempt_if: []
+    severity: medium
+    action: OPTIMIZE_NEEDED
+    advice: "同呋喃，未取代噻吩有CYP氧化生成活性硫代环氧物的风险。"
+    precision_note: "已验证: 对未取代噻吩命中，对2-甲基噻吩不命中。"
+
+  pyrrole_alpha_unsubstituted:
+    smarts: "[nH]1[cH][cH][cH][cH]1"
+    exempt_if: []
+    severity: low
+    action: OPTIMIZE_NEEDED
+    advice: "未取代吡咯环有潜在代谢活化风险，关注度低于呋喃/噻吩，仅做提示。"
+    precision_note: "已验证: 对游离NH吡咯命中，对N-取代或α位取代的吡咯不命中。"
+
+  michael_acceptor_offtarget:
+    smarts: "[CX3]=[CX3][CX3]=[OX1]"
+    exempt_if: []
+    severity: high
+    action: OPTIMIZE_NEEDED
+    advice: >
+      命中迈克尔受体(α,β-不饱和羰基)。如果这是路线B/C设计中的共价弹头本身，
+      请在 target_profile.yaml 里将 chemistry_route.covalent_warhead_enabled 设为 true，
+      并在调用 admet.run_alerts() 时传入 warhead_smarts 参数做豁免——不要直接改这条规则本身。
+      如果不是设计弹头，视为非特异共价/GSH加合风险，需要移除。
+    precision_note: >
+      已验证: 对丙烯酰胺(C=CC(=O)N)命中。奥希替尼自身的丙烯酰胺弹头也会命中这条规则——
+      这是预期行为(它本来就是一个共价弹头)，不是误报；路线A(非共价)的候选分子如果命中这条，
+      才是真正需要关注的信号。
+
+  diaminobenzene_1_4:
+    smarts: "[NX3;H2,H1;!$(N[C,S]=[O,S,N])]c1ccc([NX3;H2,H1;!$(N[C,S]=[O,S,N])])cc1"
+    exempt_if: []
+    severity: high
+    action: REJECT
+    advice: "对位二氨基苯可氧化为醌二亚胺，遗传毒性风险。单侧酰化或替换为非氨基取代基。"
+    precision_note: >
+      已验证: 对对苯二胺命中，对单侧酰化的对苯二胺不命中。已验证对奥希替尼不误报——
+      奥希替尼central ring上虽然有两个含氮取代基，但其中一个是酰胺(丙烯酰胺)，不满足
+      '两个游离胺'的条件，加上!$(N[C,S]=[O,S,N])排除子式后正确地不再触发。
+
+  diaminobenzene_1_2:
+    smarts: "[NX3;H2,H1;!$(N[C,S]=[O,S,N])]c1ccccc1[NX3;H2,H1;!$(N[C,S]=[O,S,N])]"
+    exempt_if: []
+    severity: high
+    action: REJECT
+    advice: "邻位二氨基苯同样有醌二亚胺氧化风险。"
+    precision_note: "已验证: 对邻苯二胺命中，对奥希替尼不误报(同上条原因)。"
+
+  methylheterocycle_alpha_n:
+    smarts: "c1(C)ncccc1"
+    exempt_if: []
+    severity: low
+    action: OPTIMIZE_NEEDED
+    advice: "杂环氮邻位的甲基是醛氧化酶(AO)的经典代谢位点，种属差异大(大鼠/人AO活性差异显著)，建议用CD3或换成乙基/环丙基阻断。"
+    precision_note: "已验证: 对2-甲基吡啶命中，对3-甲基吡啶(非邻位)不命中。只覆盖吡啶环，嘧啶/哒嗪等其他含氮杂环的类似基序尚未覆盖。"
+
+# ------------------------------------------------------------
+# 不适合用纯 SMARTS 表达的规则：需要"子结构 + 计算属性"组合判断，
+# 在 core/admet.py 里单独实现，不在这个纯 SMARTS 引擎里：
+#   - herg_risk_basic_amine: 强碱性叔胺(pKa>8) + 芳香环 + cLogP高 的组合信号，
+#     见 core/admet.py 的 estimate_herg_risk_proxy()
+#   - cyp3a4_tdi: 含苯胺/呋喃/炔烃/仲胺的组合，且需要预孵育实验数据校准，
+#     计算侧目前只能给出"结构标记"，不能替代湿实验
+# ------------------------------------------------------------
+property_combined_rules_note: >
+  见 core/admet.py 中 HERG_RISK_SUBSTRUCTURES 和 estimate_herg_risk_proxy()。

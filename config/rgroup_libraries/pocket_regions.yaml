@@ -1,0 +1,93 @@
+# ============================================================
+# 按口袋区域组织的 R 基团库（环节3.2）
+#
+# 用法：每个片段用 "*" 标记连接点(core/enumerate.py 用 RDKit 的
+# ReplaceSubstructs 在骨架的对应位点上做替换)。所有 SMILES 已经过
+# RDKit 解析验证（见 tests/test_rgroup_libraries.py）。
+#
+# 这不是一份详尽的商业R基团库(那种量级是万级，通常来自Enamine/内部积累)，
+# 而是一份体现"按口袋区域定向设计"方法论的起步集合——真实项目里这份清单
+# 应该随着每一轮DMTA的SAR结论持续扩充/剔除。
+# ============================================================
+
+hinge:
+  description: "铰链区：保持与ATP腺嘌呤口袋的氢键供受体对，通常由骨架本身决定，这里是可微调的小替换"
+  fragments:
+    - smiles: "*c1ncccn1"
+      name: "2-aminopyrimidine"
+      note: "奥希替尼/BLU-945等多数四代药采用的铰链基序"
+    - smiles: "*c1ncccc1"
+      name: "2-aminopyridine"
+      note: "吉非替尼/厄洛替尼类喹唑啉铰链的简化类比"
+    - smiles: "*c1ncc2[nH]ccc2n1"
+      name: "7-azaindole-like"
+      note: "示例性扩展骨架，用于尝试绕开铰链区专利"
+
+entrance_797:
+  description: "797入口区：能与Ser797-OH形成氢键的小极性基，权重不超过15%(见pipeline.yaml的ser797_hbond_policy)"
+  fragments:
+    - smiles: "*S(C)(=O)=O"
+      name: "methylsulfone"
+    - smiles: "*S(=O)(=O)N"
+      name: "primary_sulfonamide"
+    - smiles: "*S(=O)(=O)NC"
+      name: "N-methylsulfonamide"
+    - smiles: "*c1ccncc1"
+      name: "pyridin-4-yl"
+      note: "环氮作氢键受体"
+    - smiles: "*F"
+      name: "fluoro"
+      note: "弱极性占位，常用于微调去溶剂化平衡"
+    - smiles: "*C#N"
+      name: "nitrile"
+
+hydrophobic_back_pocket:
+  description: "疏水背袋：门卫残基(Thr790/Met790)附近，基团大小是三突变vs双突变活性分化的主因"
+  fragments:
+    - smiles: "*C"
+      name: "methyl"
+    - smiles: "*CC"
+      name: "ethyl"
+    - smiles: "*C(C)C"
+      name: "isopropyl"
+    - smiles: "*C1CC1"
+      name: "cyclopropyl"
+    - smiles: "*Cl"
+      name: "chloro"
+    - smiles: "*C(F)(F)F"
+      name: "trifluoromethyl"
+
+solvent_exposed:
+  description: >
+    溶剂暴露区：决定PK/溶解度/hERG。刻意富集弱碱性或中性替代物，
+    避免"强碱性叔胺+高亲脂性"这个hERG经典组合(环节3.2)。
+  fragments:
+    - smiles: "*N1CCOCC1"
+      name: "morpholine"
+      basicity: "neutral"
+    - smiles: "*N1CCN(C)CC1"
+      name: "N-methylpiperazine"
+      basicity: "weak_base"
+    - smiles: "*N1CCN(S(C)(=O)=O)CC1"
+      name: "methanesulfonylpiperazine"
+      basicity: "neutral"
+      note: "磺酰化把哌嗪碱性压下去，经典hERG缓解手段"
+    - smiles: "*N1CC(F)(F)C1"
+      name: "3,3-difluoroazetidine"
+      basicity: "weak_base"
+    - smiles: "*N1CC(F)C1"
+      name: "3-fluoroazetidine"
+      basicity: "weak_base"
+    - smiles: "*C1COC1"
+      name: "oxetan-3-yl"
+      basicity: "neutral"
+    - smiles: "*N1CCOCC1=O"
+      name: "morpholinone"
+      basicity: "neutral"
+    - smiles: "*NC(C)=O"
+      name: "acetamido"
+      basicity: "neutral"
+    - smiles: "*N1CC2CCC1CC2"
+      name: "bridged_bicyclic_amine"
+      basicity: "weak_base"
+      note: "桥环胺降低碱性暴露的示例"
