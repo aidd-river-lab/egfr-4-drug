@@ -16,7 +16,7 @@ import numpy as np
 import yaml
 from pathlib import Path
 
-PIPELINE_CONFIG = Path(__file__).resolve().parent.parent / "config" / "pipeline.yaml"
+from core.route_config import route_config_dir
 
 
 @dataclass
@@ -44,12 +44,15 @@ class FEPMapResult:
         errors = [abs(p.predicted_ddg_kcal_mol - p.experimental_ddg_kcal_mol) for p in anchors]
         return float(np.mean(errors))
 
-    def qc_pass(self) -> dict:
+    def qc_pass(self, config_dir: Path | None = None) -> dict:
         """
         设计文档环节4.4的硬规则：没有实验锚点的map不能用；MUE超过阈值整张map作废。
         这是真实的质控逻辑，用合成数据就能完整验证正确性（见 __main__）。
+
+        config_dir: 不传则默认路线C的pipeline.yaml；路线A/B传各自的 route_config_dir(...)。
         """
-        with open(PIPELINE_CONFIG, encoding="utf-8") as f:
+        config_dir = config_dir or route_config_dir()
+        with open(config_dir / "pipeline.yaml", encoding="utf-8") as f:
             threshold = yaml.safe_load(f)["funnel"]["L4"]["qc"]["mue_reject_threshold_kcal_mol"]
 
         if not self.anchor_perturbations:

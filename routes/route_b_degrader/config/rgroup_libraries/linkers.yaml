@@ -1,0 +1,30 @@
+# ============================================================
+# Linker库（路线B：双功能降解剂的warhead-E3连接臂）
+#
+# PEG链和三氮唑linker是PROTAC文献里最常见的两类连接化学(见doc/competitive-landscape.md
+# 的引用来源)，这里给出不同长度的illustrative示例，用来演示组合枚举怎么跑，
+# 不是针对某个具体warhead/E3配体对优化过的真实linker长度。
+#
+# 每个linker恰好有两个连接点(*)：一端接warhead，另一端接E3配体，
+# 这是和pocket_regions.yaml单连接点片段本质不同的地方，core/enumerate.py里
+# 用专门的 _mol_with_isotope_dummies() 处理，不是复用单连接点那个函数。
+# ============================================================
+
+linkers:
+  description: "warhead-E3连接臂，PEG链和三氮唑两类，不同长度"
+  fragments:
+    - smiles: "*CCOCC*"
+      name: "peg1"
+      length_atoms: 4
+    - smiles: "*CCOCCOCC*"
+      name: "peg2"
+      length_atoms: 7
+    - smiles: "*CCOCCOCCOCC*"
+      name: "peg3"
+      length_atoms: 10
+    - smiles: "*CCn1cc(CC*)nn1"
+      name: "triazole_short"
+      note: "click化学常用连接方式，刚性比PEG链更强"
+    - smiles: "*CCCC*"
+      name: "alkyl_c4"
+      note: "全碳链，疏水性对照"

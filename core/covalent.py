@@ -1,6 +1,6 @@
 """
-环节4.3：共价对接（仅路线B/C启用，见 target_profile.yaml 的
-chemistry_route.covalent_warhead_enabled）
+环节4.3：共价对接（仅chemistry_route=covalent_new_site/covalent_pan_mutant_broad时启用，
+见 target_profile.yaml 的 chemistry_route.covalent_warhead_enabled）
 
 真实共价对接需要 Schrödinger CovDock / AutoDock4-covalent / Rosetta，本环境未安装。
 真实、可测试的部分：Bürgi-Dunitz攻击角判据——这是纯几何判断，不需要真的跑过
@@ -17,7 +17,8 @@ from dataclasses import dataclass
 import yaml
 from pathlib import Path
 
-PIPELINE_CONFIG = Path(__file__).resolve().parent.parent / "config" / "pipeline.yaml"
+from core.route_config import route_config_dir
+
 BD_ANGLE_TOLERANCE_DEGREE = 15  # 允许的偏差范围，105°±15°
 
 
@@ -39,12 +40,15 @@ class CovalentDockingResult:
         return self.kinact_per_second / self.ki_nm
 
 
-def evaluate_attack_geometry(result: CovalentDockingResult) -> dict:
+def evaluate_attack_geometry(result: CovalentDockingResult, config_dir: Path | None = None) -> dict:
     """
     判断预结合位姿的弹头几何是否合理：攻击角接近Bürgi-Dunitz角(~105°)。
     这条判据是纯几何检查，用合成数据就能完整验证（见 __main__）。
+
+    config_dir: 不传则默认路线C的pipeline.yaml；路线A/B传各自的 route_config_dir(...)。
     """
-    with open(PIPELINE_CONFIG, encoding="utf-8") as f:
+    config_dir = config_dir or route_config_dir()
+    with open(config_dir / "pipeline.yaml", encoding="utf-8") as f:
         target_angle = yaml.safe_load(f)["covalent_route"]["attack_angle_bd_degree"]
 
     deviation = abs(result.attack_angle_degree - target_angle)

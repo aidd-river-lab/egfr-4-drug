@@ -1,13 +1,7 @@
 """
-routes/route_c_4th_gen_tki/config/rgroup_libraries/*.yaml 里每个SMILES片段的
-RDKit可解析性验证。这是 pocket_regions.yaml 顶部注释承诺的那份测试脚本。
-
-路线A/B各自的rgroup_libraries有自己独立的验证测试(test_route_a_rgroup_libraries.py等)，
-不和这份文件混在一起，避免路线之间的测试互相干扰。
-
-重点检查两件事(呼应 core/enumerate.py 里molzip那个曾经静默失败的bug)：
-  1. 每个片段都能被RDKit解析+sanitize
-  2. 每个片段恰好有一个虚拟原子(*)作为连接点——多于或少于一个都会让molzip的结果不可控
+routes/route_a_shp2_sos1/config/rgroup_libraries/*.yaml 的RDKit可解析性验证。
+和 test_rgroup_libraries.py(路线C)结构完全对称，独立成文件避免两条路线的
+测试互相干扰(呼应 test_rgroup_libraries.py 顶部注释)。
 """
 from pathlib import Path
 
@@ -16,7 +10,7 @@ from rdkit import Chem
 
 from core.route_config import route_config_dir
 
-CONFIG_DIR = route_config_dir("route_c_4th_gen_tki") / "rgroup_libraries"
+CONFIG_DIR = route_config_dir("route_a_shp2_sos1") / "rgroup_libraries"
 
 
 def _load_pocket_regions():
@@ -48,14 +42,12 @@ def test_all_fragments_have_exactly_one_dummy_atom():
     for region_name, frag_name, smiles in _all_fragments():
         mol = Chem.MolFromSmiles(smiles)
         n_dummy = sum(1 for atom in mol.GetAtoms() if atom.GetAtomicNum() == 0)
-        assert n_dummy == 1, (
-            f"{region_name}/{frag_name} 应该恰好有1个连接点(*)，实际有{n_dummy}个: {smiles}"
-        )
+        assert n_dummy == 1, f"{region_name}/{frag_name} 应该恰好有1个连接点(*)，实际有{n_dummy}个: {smiles}"
 
 
-def test_at_least_one_region_per_expected_pocket():
+def test_expected_pocket_regions_present():
     regions = _load_pocket_regions()
-    for expected in ["hinge", "entrance_797", "hydrophobic_back_pocket", "solvent_exposed"]:
+    for expected in ["tunnel_amine", "distal_aryl"]:
         assert expected in regions
         assert len(regions[expected]["fragments"]) >= 1
 
@@ -68,6 +60,4 @@ def test_scaffold_core_smiles_parses_with_isotope_labeled_dummies():
         mol = Chem.MolFromSmiles(scaffold["core_smiles"])
         assert mol is not None, f"scaffold {scaffold_name} 的core_smiles无法解析"
         isotopes = sorted(atom.GetIsotope() for atom in mol.GetAtoms() if atom.GetAtomicNum() == 0)
-        assert isotopes == [1, 2, 3], (
-            f"scaffold {scaffold_name} 应该有同位素标记为1/2/3的三个连接点，实际: {isotopes}"
-        )
+        assert isotopes == [1, 2], f"scaffold {scaffold_name} 应该有同位素标记为1/2的两个连接点，实际: {isotopes}"

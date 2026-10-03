@@ -1,0 +1,89 @@
+# ============================================================
+# 多级打分漏斗配置（路线A：SHP2/SOS1变构抑制剂）
+# 漏斗形状和路线C完全一样(L0排除->...->L4 FEP排名)，core/md_stability.py等
+# 打分函数不需要改代码，只是把"hinge_hbond"/"target_anchor"这两个历史上照着
+# 激酶铰链+Ser797场景起名的key，挪用来表示本路线自己的等价概念(见下方注释)。
+# ============================================================
+
+funnel:
+  L0:
+    name: "药效团 + 形状匹配 + 属性过滤"
+    method: "pharmacophore_shape_match"
+    tools: ["ROCS", "Pharmit", "RDKit property filters"]
+    throughput_per_day: 100000000
+    error_kcal_mol: null
+    purpose: "从巨型库里切出约10^5量级，只做粗排除"
+    implemented_in: "core/enumerate.py 的属性过滤部分 + core/admet.py 的硬约束"
+
+  L1:
+    name: "快速对接"
+    method: "fast_docking"
+    tools: ["AutoDock Vina", "Gnina", "Glide SP"]
+    throughput_per_day: 500000
+    error_kcal_mol: 2.5
+    purpose: "砍掉明显不贴合tunnel位点的，只做排除不做排名"
+    decision_rule: "vina_score 仅用于排除，不进入最终排序权重"
+    l1_exclude_above_kcal_mol: -6.0
+    implemented_in: "core/docking.py"
+
+  L2:
+    name: "精细对接 + 重打分"
+    method: "refined_docking_rescoring"
+    tools: ["Glide XP", "Gnina CNN rescoring"]
+    throughput_per_day: 10000
+    error_kcal_mol: 2.0
+    purpose: "生成可信的结合构象，供L3使用（本路线不涉及共价对接）"
+    implemented_in: "core/docking.py"
+
+  L3:
+    name: "MM-GBSA + 短程MD稳定性"
+    method: "mmgbsa_md_stability"
+    tools: ["OpenMM", "GROMACS"]
+    throughput_per_day: 300
+    error_kcal_mol: 1.3
+    purpose: "排除'对接分高但结合不稳'的假阳性"
+    md_length_ns: 20
+    md_replicas: 3
+    pass_criteria:
+      ligand_rmsd_last_15ns_mean_max_angstrom: 2.5
+      hinge_hbond_occupancy_min_pct: 60
+      hinge_hbond_note: "本路线复用这个key表示tunnel位点关键H-bond网络(Phe113/Arg111/Glu250)的占据率，不是激酶铰链"
+      target_anchor_occupancy_min_pct: 40
+      target_anchor_note: "本路线target_anchor指Glu250这个关键H-bond受体残基的占据率，和路线C的Ser797是完全不同的生物学概念，只是复用同一个判定函数(core/md_stability.py::evaluate_pass_criteria)"
+    implemented_in: "core/md_stability.py / core/mmgbsa.py"
+
+  L4:
+    name: "FEP 相对结合自由能"
+    method: "fep"
+    tools: ["OpenFE", "FEP+", "Amber TI"]
+    throughput_per_day_per_gpu_node: 30
+    error_kcal_mol: 0.75
+    purpose: "同系列SAR的真正预测——tunnel位点结构清楚、共晶多，是三条路线里FEP最友好的一个"
+    requires:
+      - "可靠的L3结合位姿"
+      - "每张map 2-3个已知活性化合物做实验锚点校正(可用TNO155/RMC-4630系列的已发表数据)"
+    qc:
+      mue_reject_threshold_kcal_mol: 1.5
+    implemented_in: "core/fep.py"
+
+# ------------------------------------------------------------
+# 本路线不涉及共价化学，不需要 ser797_hbond_policy / covalent_route 这类章节——
+# 这不是遗漏，是因为 target_profile.yaml 的 chemistry_route.covalent_warhead_enabled
+# 已经设为 false，core/covalent.py 在本路线下根本不会被调用
+# ------------------------------------------------------------
+
+batch_composition:
+  typical_batch_size: 40
+  roles:
+    exploit:
+      pct: 50
+      acquisition_function: "max_expected_utility"
+    explore:
+      pct: 25
+      acquisition_function: "max_variance_ucb"
+    hypothesis_test:
+      pct: 15
+      selection: "药化指定的matched molecular pair"
+    control:
+      pct: 10
+      selection: "已知化合物复测 + 规则误杀复活名单随机抽样"

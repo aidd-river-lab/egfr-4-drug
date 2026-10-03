@@ -1,0 +1,41 @@
+# ============================================================
+# 竞品专利通式清单（路线B：EGFR降解剂，FTO专用）
+#
+# !! 重要声明 !!
+# 下面的条目是**占位示例**，不是真实的专利检索结果。真实的Markush通式解析需要：
+#   1. 从 SureChEMBL / Google Patents / Espacenet 实际检索EGFR降解剂+CRBN/VHL相关专利族
+#   2. 由专利律师或有资质的检索人员确认权利要求的真实范围
+#   3. 每季度更新一次（见下方 review_cadence）
+# 降解剂领域还有一层路线C/A不需要考虑的专利风险：E3配体本身(来那度胺/泊马度胺衍生物)
+# 的专利布局，以及linker化学的专利——FTO检索范围比小分子抑制剂更宽。
+# ============================================================
+
+review_cadence_days: 90
+last_real_review: null
+data_source_checklist:
+  - "SureChEMBL/Google Patents 检索EGFR降解剂专利族(C4 Therapeutics/CFT8919相关)"
+  - "CRBN配体(来那度胺/泊马度胺衍生物)本身的专利布局"
+  - "linker化学专利(PEG/三氮唑连接方式在PROTAC领域的现有专利覆盖)"
+  - "专利律师复核权利要求范围(不能只信LLM抽取结果)"
+
+competitor_patents:
+  - patent_id: "EXAMPLE-WO0000000000"
+    status: "placeholder_not_real"
+    assignee: "示例，非真实数据"
+    compound_series: "示例EGFR降解剂骨架"
+    markush_smarts: null
+    claim_scope_notes: "占位——真实使用前必须由专利律师确认权利要求范围"
+    priority_date: null
+    expiry_estimate: null
+
+fto_classification:
+  in_claim:
+    action: "不进入合成清单，但保留在库里作为SAR参考"
+  near_claim:
+    action: "送药化 + 专利律师人工判断"
+  clear:
+    action: "可以正常推进"
+
+near_claim_threshold:
+  max_substituent_difference_count: 2
+  tanimoto_similarity_min: 0.85

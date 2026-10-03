@@ -1,0 +1,73 @@
+# ============================================================
+# 打分漏斗配置（路线B：双功能降解剂）
+#
+# 和路线A/C的L0-L4二元结合漏斗不同——二元对接(warhead结合EGFR、E3配体结合CRBN)
+# 只是必要条件，不是充分条件：真正决定降解效率的是warhead-EGFR-CRBN三元复合物
+# 能不能形成协同效应(cooperativity)，这是二元对接完全捕捉不到的。所以这里的
+# 漏斗形状和L0-L4不是同一回事，多了一级"三元复合物"专属的评估。
+# ============================================================
+
+funnel:
+  L0:
+    name: "属性过滤"
+    method: "property_filter"
+    tools: ["RDKit property filters"]
+    purpose: "双功能分子天然beyond Rule-of-5，这一级主要卡分子量上限/极性表面积上限，不是传统类药性过滤"
+    implemented_in: "core/admet.py (需要放宽路线C的MW/TPSA阈值，不能直接套用)"
+
+  L1_warhead:
+    name: "Warhead二元对接"
+    method: "fast_docking"
+    tools: ["AutoDock Vina", "Gnina"]
+    error_kcal_mol: 2.5
+    purpose: "确认warhead部分还能结合EGFR突变体口袋(复用路线C的对接设置)"
+    implemented_in: "core/docking.py"
+
+  L1_e3_ligand:
+    name: "E3配体二元结合(不重新计算)"
+    method: "literature_known"
+    purpose: >
+      来那度胺/泊马度胺对CRBN的结合已经是充分表征的已知数据(已上市药物)，
+      不需要也不应该重新对接验证——这和路线A/C"每个片段都要自己验证"的
+      原则不矛盾，是因为这部分化学不是本项目的设计变量，是借用的成熟模块。
+    implemented_in: "不适用，直接引用文献值"
+
+  L2_ternary_complex:
+    name: "三元复合物协同效应预测（本路线的核心难点，真正的技术新增点）"
+    method: "ternary_complex_cooperativity"
+    tools: ["PRosettaC", "Rosetta", "或商业诱导契合对接工具"]
+    purpose: "预测warhead-EGFR-CRBN三元复合物能不能形成，以及协同因子α(正协同提高表观亲和力)"
+    status: "本环境未安装上述工具，core/ternary_complex.py诚实占位；hook effect判定逻辑(不需要3D结构)是真实可用的部分"
+    implemented_in: "core/ternary_complex.py"
+
+  L3_cellular:
+    name: "细胞内DC50/Dmax实测"
+    method: "wet_lab_only"
+    purpose: "三元复合物形成不等于细胞内真实降解效率(还要看泛素化效率、蛋白酶体可及性等)，这一步没有计算代理，必须湿实验"
+    implemented_in: "不适用，core/feedback.py接收湿实验回传数据"
+
+# ------------------------------------------------------------
+# Hook effect：双功能分子公认的真实药理学现象——高浓度下warhead和E3配体
+# 各自的二元结合都饱和，反而抑制三元复合物形成，剂量-响应呈钟形曲线。
+# 这条判据不需要三元复合物3D预测就能算，是本路线对应"Bürgi-Dunitz攻击角"
+# (路线C共价化学)、"qc_pass"(FEP质控)那种"真实数学、立刻可测试"的部分。
+# ------------------------------------------------------------
+hook_effect:
+  implemented_in: "core/ternary_complex.py::evaluate_hook_effect_risk()"
+  rule: "当给药浓度范围覆盖到 >= 10x max(warhead_kd, e3_ligand_kd) 时，标记hook effect风险"
+
+batch_composition:
+  typical_batch_size: 40
+  roles:
+    exploit:
+      pct: 50
+      acquisition_function: "max_expected_utility"
+    explore:
+      pct: 25
+      acquisition_function: "max_variance_ucb"
+    hypothesis_test:
+      pct: 15
+      selection: "药化指定的matched molecular pair(通常是linker长度/组成的系统扫描)"
+    control:
+      pct: 10
+      selection: "已知化合物复测 + 规则误杀复活名单随机抽样"

@@ -1,0 +1,27 @@
+# ============================================================
+# E3连接酶配体库（路线B：双功能降解剂的"招募臂"）
+#
+# !! 真实性声明 !!
+# lenalidomide/pomalidomide本身是已上市药物，结构是公开信息，不是编造的——
+# 已用RDKit交叉核对过分子式/分子量(lenalidomide C13H13N3O3/259.26，
+# pomalidomide C13H11N3O4/273.24，均与公开数据库一致)。N-连接的exit vector
+# (通过苯胺氮连接linker)是文献里CRBN招募型PROTAC最常见的连接方式之一
+# (参见MS154等CRBN-based EGFR降解剂的设计思路，doc/competitive-landscape.md有引用)。
+#
+# VHL配体(如VH032)没有收录在这里——VH032结构包含hydroxyproline骨架和多个立体
+# 中心，本仓库没有核实过它的精确SMILES，为避免凭记忆复现出立体化学错误的结构，
+# 诚实地不提供，而不是编一个"看起来像"的近似结构。真实项目接入VHL配体前，
+# 必须从原始文献或supplier目录(Sigma/MCE等，有确定的目录号)获取经过验证的结构。
+# ============================================================
+
+e3_ligands:
+  description: "CRBN(cereblon)招募配体，来那度胺/泊马度胺衍生，经N-连接改造成linker接口"
+  fragments:
+    - smiles: "*Nc1cccc2c1CN(C1CCC(=O)NC1=O)C2=O"
+      name: "lenalidomide_n_linked"
+      e3_ligase: "CRBN"
+      note: "来那度胺(已上市药物)通过苯胺氮连接linker，分子式/MW已核对(C13H13N3O3/259.26)"
+    - smiles: "*Nc1cccc2c1C(=O)N(C1CCC(=O)NC1=O)C2=O"
+      name: "pomalidomide_n_linked"
+      e3_ligase: "CRBN"
+      note: "泊马度胺(已上市药物)通过苯胺氮连接linker，分子式/MW已核对(C13H11N3O4/273.24)"

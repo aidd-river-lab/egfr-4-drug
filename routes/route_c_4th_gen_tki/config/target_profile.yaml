@@ -6,7 +6,7 @@
 
 project:
   name: "EGFR C797S 第四代抑制剂"
-  design_doc: "doc/00-design-overview.md"
+  design_doc: "doc/routes/route-c-4th-gen-tki.md"  # 总览见 doc/00-design-overview.md(三路线共用)
   owner: "River"
   last_updated: "2026-10-02"
 
@@ -70,15 +70,30 @@ genotypes:
 
 # ------------------------------------------------------------
 # 0.2 化学路线：当前主攻/备份，决定 core/covalent.py 是否启用
+#
+# 2026-10 更正：原notes把"主攻可逆正构"的理由错误地归到了silevertinib头上——
+# 核查后发现silevertinib(BDTX-1535)实际是共价药(只是换了个不依赖C797的新共价位点，
+# 不是可逆机制)。真正验证"可逆正构能打C797S"这条路线的真实临床precedent是
+# tigozertinib(BLU-945)：Blueprint Medicines的四代EGFR药，明确是reversible/
+# non-covalent/wild-type-sparing，对T790M/C797S双突变和三突变都有活性。
+# silevertinib的真正价值在于它是"共价+广谱覆盖"路线的precedent，并且公开披露了
+# 真实的脑渗透数据(见下方cns_kp_uu这一行和 doc/routes/route-c-4th-gen-tki.md)——
+# 这是一个独立于"可逆还是共价"这条轴的、所有四代药都要面对的竞争基准。
 # ------------------------------------------------------------
 chemistry_route:
-  primary: "A"  # A=可逆正构(ATP竞争) B=新位点共价 C=共价+非经典突变广谱 D=变构/降解剂
-  backup: "B"
+  primary: "reversible_orthosteric"      # 可逆正构(ATP竞争)，不依赖C797本身，precedent=tigozertinib(BLU-945)
+  backup: "covalent_new_site"             # 新位点共价(绕开C797，打其他可及Cys)
+  # 第三个选项 covalent_pan_mutant_broad：共价+非经典突变广谱覆盖，precedent=silevertinib(BDTX-1535)
+  # 第四个选项 allosteric_degrader：变构/降解剂——已经作为独立的路线B拆出去了，不在这个枚举里选，
+  #   原因就是下面这条旧注释说的，现在被我们自己验证了一遍：
   notes: >
-    主攻 A 的理由：机制已被 silevertinib 临床验证（C797S 队列 ORR 约36%），
-    且 A 的主要难点(PK、WT选择性)恰好是计算化学能帮上忙的地方。
-    D 不要混进本管线——结构模板/细胞系/打分逻辑都不同，应作为独立项目。
-  covalent_warhead_enabled: false  # 路线A不需要；切到B/C时改true，core/covalent.py才会被workflow调用
+    主攻可逆正构(reversible_orthosteric)的理由：真实precedent是tigozertinib(BLU-945，
+    Blueprint Medicines)，明确reversible/non-covalent/wild-type-sparing，对T790M/C797S
+    双突变和三突变都有活性，机制上不需要依赖任何特定半胱氨酸，从根上绕开了"C797S移除了
+    奥希替尼共价靶点"这个问题。这条路线的主要难点(PK、WT选择性)恰好是计算化学能帮上忙的地方。
+    "变构/降解剂"不要混进本管线——结构模板/细胞系/打分逻辑都不同，应作为独立项目，这就是
+    为什么它被拆成了独立的路线B(routes/route_b_degrader/)，而不是这个枚举里的第四个选项。
+  covalent_warhead_enabled: false  # 可逆正构不需要；切到covalent_new_site/covalent_pan_mutant_broad时改true
 
 # ------------------------------------------------------------
 # 0.3 TPP（目标产品画像）：这张表就是整条管线的损失函数。

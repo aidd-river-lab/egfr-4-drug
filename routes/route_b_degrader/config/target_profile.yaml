@@ -1,0 +1,146 @@
+# ============================================================
+# 路线B：EGFR突变选择性降解剂（催化式作用机制，不需要压过细胞内毫摩尔级ATP）
+#
+# 和路线C(四代EGFR TKI/C797S)覆盖同样的病人群(C797S等靶上耐药突变)，
+# 但作用机制完全不同：不是占据ATP口袋抑制激酶活性，而是招募E3连接酶把
+# 突变EGFR蛋白整个降解掉。优势：(1)催化式作用机制，低暴露量即可起效，绕开
+# 四代TKI最难的"压过内源性ATP浓度"这个问题；(2)理论上能同时覆盖C797S和其他
+# 靶上突变(降解不挑具体突变类型，只要warhead还能结合就行)；(3)去掉EGFR的
+# 激酶非依赖支架功能；(4)耐药需要E3连接酶本身丢失，是更罕见的逃逸路径。
+#
+# 最大障碍：CNS渗透。真实文献证据(见doc/competitive-landscape.md)明确指出
+# "大多数EGFR降解剂体外活性很好，但PK性质跟不上"——这不是本项目编的风险，
+# 是整个领域公认的真实短板，所以CNS Kp,uu在这里被提升为一级TPP指标，不是
+# 像路线C那样的常规监测项。
+# ============================================================
+
+project:
+  name: "突变选择性EGFR降解剂"
+  design_doc: "doc/routes/route-b-degrader.md"
+  owner: "River"
+  last_updated: "2026-10-03"
+  status_note: >
+    技术风险最高、护城河也最高的一条路线。真实precedent是CFT8919(C4 Therapeutics，
+    EGFR L858R选择性降解剂)——但核查后发现它比想象中更早期：IND刚获批，
+    中国1期试验"尚未开始入组"，说明这个赛道几乎没有临床验证，机会和风险并存。
+
+# ------------------------------------------------------------
+# 0.1 可及人群：和路线C一样按EGFR突变分型(降解机制不挑具体突变类型，
+# 只要warhead还能结合该突变体就行)
+# ------------------------------------------------------------
+genotypes:
+  primary:
+    - id: del19_C797S
+      label: "del19/C797S（无T790M）"
+      clinical_context: "一线即用奥希替尼耐药后，当前最大的病人群"
+    - id: L858R_C797S
+      label: "L858R/C797S（无T790M）"
+      clinical_context: "一线即用奥希替尼耐药后"
+  secondary:
+    - id: del19_T790M_C797S
+      label: "del19/T790M/C797S（三突变）"
+    - id: L858R_T790M_C797S
+      label: "L858R/T790M/C797S（三突变）"
+  counter_screen:
+    - id: EGFR_WT
+      label: "EGFR 野生型"
+      role: "反靶点——注意降解剂的选择性来源和小分子抑制剂不同，既要warhead对突变体
+        有结合偏好，也要三元复合物(warhead-EGFR-E3)的协同效应对突变体更有利，
+        两层选择性机制叠加，是本路线计算层面最有意思也最难的部分"
+
+# ------------------------------------------------------------
+# 0.2 作用机制：三组分双功能分子，不是传统chemistry_route分类
+# ------------------------------------------------------------
+modality:
+  type: "heterobifunctional_degrader"
+  warhead: "EGFR突变体ATP口袋结合臂，复用路线C已验证的铰链+口袋化学"
+  e3_ligase: "CRBN(cereblon)，招募配体为来那度胺/泊马度胺衍生物"
+  linker: "PEG链或三氮唑，长度是关键优化变量(影响协同效应cooperativity和成药性)"
+  covalent_warhead_enabled: false
+
+# ------------------------------------------------------------
+# 0.3 TPP：注意主终点是DC50/Dmax，不是IC50(环节4.3"共价药的IC50没有意义"这条
+# 原则在这里的类比：降解剂的IC50/Ki同样不是决定性终点)。CNS Kp,uu是一级指标。
+# 最后三行是三条路线统一新增的"联用设计"指标。
+# ------------------------------------------------------------
+tpp:
+  - metric: dc50_nm
+    label: "DC50(降解50%靶蛋白所需浓度)"
+    minimum: 100
+    target: 10
+    direction: lower_is_better
+    unit: nM
+    computed_by: "core/ternary_complex.py(三元复合物3D预测需要PRosettaC/Rosetta类工具，本仓库诚实占位；hook effect判定逻辑是真实可测试的)"
+
+  - metric: dmax_pct
+    label: "Dmax(最大降解百分比)"
+    minimum: 70
+    target: 90
+    direction: higher_is_better
+    unit: "%"
+    computed_by: "同上，需要细胞内Western/HiBiT实测数据校准，计算侧只能给方向性预测"
+
+  - metric: cns_kp_uu
+    label: "CNS渗透 Kp,uu —— 本路线的一级指标，不是次要监测项"
+    minimum: 0.1
+    target: 0.3
+    direction: higher_is_better
+    unit: ratio
+    computed_by: >
+      CNS MPO + MDR1-MDCK外排比。文献明确指出这是EGFR降解剂的真实短板
+      (分子量大、极性强，体外活性好但PK往往跟不上)，所以这里的target虽然只有
+      路线C(silevertinib校准后约0.5-0.8)的一半不到，依然是本路线最难达成的指标，
+      是否能先解决这个问题，决定了这条路线能不能走通。
+
+  - metric: molecular_weight
+    label: "分子量"
+    minimum: null
+    target: 700
+    maximum: 900
+    direction: lower_is_better
+    unit: Da
+    computed_by: "RDKit Descriptors.MolWt——双功能分子天然beyond Rule-of-5，target已经比路线C(520)/路线A(450)宽松很多"
+
+  - metric: hook_effect_margin
+    label: "Hook effect安全窗(有效浓度范围跨度)"
+    minimum: 10
+    target: 100
+    direction: higher_is_better
+    unit: "倍(浓度上限/浓度下限)"
+    computed_by: "core/ternary_complex.py::evaluate_hook_effect_risk()，真实可测试的药理学逻辑，不需要三元复合物3D结构"
+
+  - metric: cyp_ddi_risk
+    label: "CYP3A4/2C9介导的药物相互作用风险"
+    minimum: null
+    target: "low"
+    direction: qualitative
+    unit: qualitative
+    computed_by: "CYP抑制预测(待接入)+和已知联用药物代谢通路交叉检查"
+
+  - metric: non_overlapping_toxicity
+    label: "与化疗/amivantamab不重叠的毒性谱"
+    minimum: null
+    target: "no new grade>=3 AE overlap"
+    direction: qualitative
+    unit: qualitative
+    computed_by: "结构警示+同靶点已知毒性文献比对"
+
+  - metric: dosing_compatibility
+    label: "给药方案兼容性(QD、不受食物影响)"
+    minimum: null
+    target: "QD, food-independent"
+    direction: qualitative
+    unit: qualitative
+    computed_by: "溶解度pH依赖性+预测口服吸收分数——对beyond-Ro5分子这一项比路线A/C更难达成"
+
+decision_engine:
+  pareto_objectives:
+    - dc50_nm
+    - dmax_pct
+    - cns_kp_uu
+    - hook_effect_margin
+  batch_quota:
+    exploit_pct: 50
+    explore_pct: 25
+    hypothesis_test_pct: 15
+    control_pct: 10

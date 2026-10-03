@@ -1,0 +1,42 @@
+# ============================================================
+# 按口袋区域组织的 R 基团库（路线A：SHP2变构tunnel位点）
+#
+# 用法同 routes/route_c_4th_gen_tki：每个片段用裸 "*" 标记连接点。
+# 所有 SMILES 已经过 RDKit 解析验证，并且用 core/enumerate.py::assemble()
+# 实跑过全组合(4x4=16个)连通性校验，全部一次成功(见本次构建时的验证记录)。
+#
+# 这不是详尽的商业R基团库，而是体现"按tunnel位点关键残基定向设计"方法论的
+# 起步集合——参考了PDB 5EHR里Phe113/Arg111/Glu250这几个关键残基的相互作用类型。
+# ============================================================
+
+tunnel_amine:
+  description: >
+    朝向tunnel位点深处、与Glu250形成关键氢键的碱性胺臂。这是SHP099类化合物的
+    标志性设计元素——基础胺质子化后和Glu250形成盐桥，这也是选择性的来源之一
+    (SHP1的对应位置残基环境不同)。
+  fragments:
+    - smiles: "*C1(N)CCN(C)CC1"
+      name: "4-amino-1-methylpiperidin-4-yl"
+    - smiles: "*C1(N)CCNCC1"
+      name: "4-aminopiperidin-4-yl"
+    - smiles: "*N1CCC(N)C1"
+      name: "3-aminopyrrolidin-1-yl"
+      note: "通过环氮连接，是另一类常见的exit vector"
+    - smiles: "*N1CC(N)C1"
+      name: "3-aminoazetidin-1-yl"
+      note: "更紧凑的环系，用于微调口袋填充度"
+
+distal_aryl:
+  description: >
+    朝向tunnel远端疏水亚口袋的联芳基取代模式，对应已发表化学型里
+    二氯苯/三氟甲基苯一类取代基的角色。
+  fragments:
+    - smiles: "*c1c(Cl)c(Cl)ccc1"
+      name: "2,3-dichlorophenyl"
+    - smiles: "*c1c(F)c(Cl)ccc1"
+      name: "3-chloro-2-fluorophenyl"
+    - smiles: "*c1cccc(C(F)(F)F)c1"
+      name: "3-(trifluoromethyl)phenyl"
+    - smiles: "*c1ncccc1Cl"
+      name: "2-chloropyridin-3-yl"
+      note: "用吡啶环替换苯环，常见的降低亲脂性/调节代谢稳定性手段"

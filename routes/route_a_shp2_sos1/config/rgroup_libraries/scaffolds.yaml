@@ -1,0 +1,29 @@
+# ============================================================
+# 核心骨架模板（路线A：SHP2变构tunnel位点）
+#
+# !! 重要声明 !!
+# 下面的骨架是**示例性的氨基吡嗪母核**，灵感来自已发表的"aminopyrazines as
+# allosteric SHP2 inhibitors"这一类化学型文献(见doc/competitive-landscape.md的
+# 引用)，用来演示"骨架+带方向标注的可变位点"这个数据结构怎么驱动
+# core/enumerate.py，**不是对SHP099或任何specific已发表化合物的精确重现**——
+# 本仓库没有核实过SHP099的精确原子连接方式，为避免凭记忆复现出错误结构，
+# 这里只借用该化学型"碱性胺+联芳基"的总体设计思路，具体取代模式是自行设计的。
+# 真实项目的骨架必须直接来自文献共晶结构解析或药化确认，不能直接用这份文件。
+#
+# 连接点约定：同 routes/route_c_4th_gen_tki 的约定，[1*] [2*] 对应 R1/R2。
+# ============================================================
+
+templates:
+  - id: "demo_aminopyrazine_tunnel"
+    status: "illustrative_only"
+    core_smiles: "[1*]C1CCN(c2cnc(-c3ccccc3[2*])c(N)n2)CC1"
+    description: "氨基吡嗪铰链 + 哌啶胺臂 + 远端联芳基，两个可变位点"
+    attachment_points:
+      - label: R1
+        isotope: 1
+        region: tunnel_amine
+        rationale: "朝向PDB 5EHR里Glu250关键氢键受体的方向，对应SHP099类化合物里碱性胺的角色"
+      - label: R2
+        isotope: 2
+        region: distal_aryl
+        rationale: "朝向疏水亚口袋，对应已发表化合物里二氯苯/三氟甲基苯一类取代模式"

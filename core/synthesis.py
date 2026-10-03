@@ -17,6 +17,8 @@ import rdkit
 import yaml
 from rdkit import Chem, RDLogger
 
+from core.route_config import route_config_dir
+
 RDLogger.DisableLog("rdApp.*")
 
 # RDKit 的 SAscore 在 Contrib/ 目录下，不是标准可 import 的子包，需要手动把路径加进 sys.path
@@ -24,8 +26,6 @@ _SA_SCORE_DIR = os.path.join(os.path.dirname(rdkit.__file__), "Contrib", "SA_Sco
 if _SA_SCORE_DIR not in sys.path:
     sys.path.append(_SA_SCORE_DIR)
 import sascorer  # noqa: E402  （必须在上面插入sys.path之后才能import，顺序不能换）
-
-CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
 
 
 def compute_sa_score(mol_or_smiles) -> dict:
@@ -79,14 +79,17 @@ def run_retrosynthesis_stub(smiles: str) -> dict:
     }
 
 
-def check_fto(smiles: str) -> dict:
+def check_fto(smiles: str, config_dir: Path | None = None) -> dict:
     """
-    环节3.4 FTO检查的占位接口，读取 config/patent_landscape.yaml。
+    环节3.4 FTO检查的占位接口，读取 <route>/config/patent_landscape.yaml。
     该配置文件目前只有占位示例数据(status: placeholder_not_real)，所以这里返回的
     fto_status 永远是 "unknown_no_real_patent_data"，直到有人接入真实专利检索结果。
     不要把这个函数现在的返回值当成真实的FTO结论。
+
+    config_dir: 不传则默认路线C的配置；路线A/B传各自的 route_config_dir(...)。
     """
-    with open(CONFIG_DIR / "patent_landscape.yaml", encoding="utf-8") as f:
+    config_dir = config_dir or route_config_dir()
+    with open(config_dir / "patent_landscape.yaml", encoding="utf-8") as f:
         landscape = yaml.safe_load(f)
 
     real_patents = [p for p in landscape["competitor_patents"] if p.get("status") != "placeholder_not_real"]

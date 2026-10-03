@@ -23,12 +23,12 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from core.route_config import route_config_dir
+
 Direction = Literal["higher_is_better", "lower_is_better"]
 
-TARGET_PROFILE_CONFIG = Path(__file__).resolve().parent.parent / "config" / "target_profile.yaml"
 
-
-def load_decision_config_from_target_profile() -> dict:
+def load_decision_config_from_target_profile(config_dir: Path | None = None) -> dict:
     """
     从 target_profile.yaml 读取 decision_engine 配置，对齐 Pareto 目标方向和批次配额。
 
@@ -41,8 +41,12 @@ def load_decision_config_from_target_profile() -> dict:
     单调的 higher/lower_is_better)，这种指标被诚实跳过并列在 skipped_non_monotonic_metrics
     里——调用方需要自己把 in_range 转换成 desirability_score 的一个 spec，而不是指望
     这里偷偷帮你决定怎么转换。
+
+    config_dir: 不传则默认读路线C(route_c_4th_gen_tki)的配置，和老代码行为完全一致；
+    路线A/B调用时显式传 route_config_dir("route_a_shp2_sos1") 之类的值。
     """
-    with open(TARGET_PROFILE_CONFIG, encoding="utf-8") as f:
+    config_dir = config_dir or route_config_dir()
+    with open(config_dir / "target_profile.yaml", encoding="utf-8") as f:
         profile = yaml.safe_load(f)
 
     tpp_direction = {row["metric"]: row["direction"] for row in profile["tpp"]}

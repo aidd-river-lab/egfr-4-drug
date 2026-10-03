@@ -79,7 +79,7 @@ compute_cns_mpo(desc)
 
 ### 共价弹头豁免
 
-路线B/C的候选分子，设计好的共价弹头本身会命中 `michael_acceptor_offtarget`
+走共价路线(chemistry_route=covalent_new_site/covalent_pan_mutant_broad)的候选分子，设计好的共价弹头本身会命中 `michael_acceptor_offtarget`
 ——这是预期行为，不是缺陷。调用时传入弹头SMARTS做豁免，**不要去改这条规则
 本身**（这条原则直接写在yaml的advice字段里）：
 

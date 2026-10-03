@@ -1,5 +1,6 @@
 """
-端到端工作流：跑一轮"纯RDKit可计算"的DMTA循环。
+端到端工作流：跑一轮"纯RDKit可计算"的DMTA循环。路线A/C共用这个工作流
+(都是固定骨架+R基团的枚举拓扑)，路线B用 run_bifunctional_round.py。
 
 !! 范围声明 !!
 这个工作流串联的是环节1(标准化)/3(枚举)/6(ADMET规则)/7.1(SA score)/8(决策)——
@@ -16,7 +17,8 @@
 这个工作流，位置见本文件最后的 TODO 注释。
 
 用法：
-    .venv/bin/python -m workflows.run_discovery_round
+    .venv/bin/python -m workflows.run_discovery_round                          # 路线C(默认)
+    .venv/bin/python -c "from workflows.run_discovery_round import run; run(route_id='route_a_shp2_sos1', scaffold_id='demo_aminopyrazine_tunnel')"
 """
 from __future__ import annotations
 
@@ -25,15 +27,23 @@ import pandas as pd
 from core.admet import compute_cns_mpo, compute_descriptors, run_structural_alerts
 from core.decide import DesirabilitySpec, desirability_score, pareto_front, select_batch
 from core.enumerate import enumerate_from_scaffold
+from core.route_config import route_config_dir
 from core.standardize import standardize_batch
 from core.synthesis import compute_sa_score
 
+DEFAULT_SCAFFOLD_BY_ROUTE = {
+    "route_a_shp2_sos1": "demo_aminopyrazine_tunnel",
+    "route_c_4th_gen_tki": "demo_aminopyrimidine_biphenyl",
+}
 
-def run(scaffold_id: str = "demo_aminopyrimidine_biphenyl", batch_size: int = 20) -> pd.DataFrame:
-    report_lines = []
+
+def run(route_id: str = "route_c_4th_gen_tki", scaffold_id: str | None = None, batch_size: int = 20) -> pd.DataFrame:
+    scaffold_id = scaffold_id or DEFAULT_SCAFFOLD_BY_ROUTE[route_id]
+    config_dir = route_config_dir(route_id)
+    report_lines = [f"[路线] {route_id}"]
 
     # ---- 环节3: 枚举 ----
-    enumerated = enumerate_from_scaffold(scaffold_id)
+    enumerated = enumerate_from_scaffold(scaffold_id, config_dir=config_dir)
     report_lines.append(f"[环节3 枚举] {scaffold_id} -> {len(enumerated)} 个连通、去重后的候选SMILES")
 
     # ---- 环节1: 标准化 + 去重(InChIKey) ----
@@ -115,6 +125,6 @@ if __name__ == "__main__":
 #   - 环节2: core/structures.py fetch_pdb + mutate_residue_stub -> 产出 StructureEnsembleMember 列表
 #   - 环节4 L1-L2: 对每个candidates["smiles"] x 每个ensemble成员跑 core/docking.py run_vina_docking
 #   - 环节4 L3-L4: core/md_stability.py / core/mmgbsa.py / core/fep.py，只对L2晋级的子集跑
-#   - 环节4.3: 如果chemistry_route是B/C，core/covalent.py evaluate_attack_geometry
+#   - 环节4.3: 如果chemistry_route是covalent_new_site/covalent_pan_mutant_broad，core/covalent.py evaluate_attack_geometry
 #   - 环节5: core/selectivity.py compute_dddg_from_fep_maps，需要环节4.4产出的FEP map
 #   - 环节9: 拿到湿实验结果后用 core/feedback.py compare_predicted_vs_actual 复盘本轮

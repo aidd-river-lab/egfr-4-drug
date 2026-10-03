@@ -46,7 +46,7 @@ run_vina_docking(receptor_pdbqt=..., ligand_pdbqt=..., center=(-14.2, 33.5, 22.8
 要在新环境接入：`python -m venv .venv`用Python 3.10+重建，`pip install meeko vina`，
 `brew install boost`（macOS）。
 
-## L2.5：共价对接（路线B/C专用）
+## L2.5：共价对接（chemistry_route=covalent_new_site/covalent_pan_mutant_broad专用）
 
 仅当 `target_profile.yaml` 的 `chemistry_route.covalent_warhead_enabled=true`
 时启用。共价对接需要Schrödinger CovDock/AutoDock4-covalent/Rosetta，本环境

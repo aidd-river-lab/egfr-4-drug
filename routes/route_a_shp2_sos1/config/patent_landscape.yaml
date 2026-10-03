@@ -1,0 +1,42 @@
+# ============================================================
+# 竞品专利通式清单（路线A：SHP2/SOS1变构抑制剂，FTO专用）
+#
+# !! 重要声明 !!
+# 下面的条目是**占位示例**，用来说明 schema 该长什么样，
+# 不是真实的专利检索结果。真实的 Markush 通式解析需要：
+#   1. 从 SureChEMBL / Google Patents / Espacenet 实际检索SHP2/SOS1相关专利族
+#   2. 由专利律师或有资质的检索人员确认权利要求的真实范围
+#   3. 每季度更新一次（见下方 review_cadence）
+# 在接入真实专利数据之前，core/synthesis.py 的 Markush 匹配功能
+# 应该视为未启用状态——不要用这个占位文件做真实的FTO判断。
+# ============================================================
+
+review_cadence_days: 90
+last_real_review: null
+data_source_checklist:
+  - "SureChEMBL 结构检索(按变构tunnel骨架 + SHP2/PTPN11关键词，或SOS1关键词)"
+  - "Google Patents / Espacenet 全文检索"
+  - "竞品公开管线(TNO155/Novartis, RMC-4630/Revolution Medicines, JAB-3312/Jacobio, RLY-1971/Relay Therapeutics, BI-3406/Boehringer Ingelheim等)的专利族"
+  - "专利律师复核权利要求范围(不能只信LLM抽取结果)"
+
+competitor_patents:
+  - patent_id: "EXAMPLE-WO0000000000"
+    status: "placeholder_not_real"
+    assignee: "示例，非真实数据"
+    compound_series: "示例变构tunnel骨架"
+    markush_smarts: null
+    claim_scope_notes: "占位——真实使用前必须由专利律师确认权利要求范围，不能只用LLM解析结果"
+    priority_date: null
+    expiry_estimate: null
+
+fto_classification:
+  in_claim:
+    action: "不进入合成清单，但保留在库里作为SAR参考"
+  near_claim:
+    action: "送药化 + 专利律师人工判断"
+  clear:
+    action: "可以正常推进"
+
+near_claim_threshold:
+  max_substituent_difference_count: 2
+  tanimoto_similarity_min: 0.85

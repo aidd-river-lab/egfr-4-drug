@@ -1,0 +1,23 @@
+# ============================================================
+# Warhead库（路线B：EGFR突变选择性降解剂的"结合臂"）
+#
+# 复用路线C(routes/route_c_4th_gen_tki)已经验证过的铰链+口袋化学——降解剂的
+# warhead本质上就是一个能结合EGFR突变体ATP口袋的小分子，和路线C的设计分子是
+# 同一类化学问题，不需要另起炉灶。
+#
+# 下面这个片段是从路线C的demo骨架(demo_aminopyrimidine_biphenyl)实际组装出来的：
+# 固定 R1(entrance_797)=methylsulfone、R2(hydrophobic_back_pocket)=trifluoromethyl，
+# 把本该留给R3(solvent_exposed)的位置改成双功能分子的linker出口——因为溶剂暴露区
+# 正好是对接linker最合理的方向，这和路线C"R3主导PK/hERG"的设计逻辑是一致的。
+# 推导过程见本次构建记录：用core/enumerate.py的assemble()机制手工验证过连通性。
+#
+# !! 这仍然是illustrative_only，不是真实候选warhead !!
+# ============================================================
+
+warheads:
+  description: "EGFR突变体ATP口袋结合臂，单一连接点朝向溶剂暴露区(linker出口)"
+  fragments:
+    - smiles: "*c1cc(C(F)(F)F)ccc1-c1ccnc(Nc2ccc(S(C)(=O)=O)cc2)n1"
+      name: "demo_warhead_from_route_c_scaffold"
+      status: "illustrative_only"
+      note: "衍生自路线C demo骨架，固定entrance_797=methylsulfone/hydrophobic_back_pocket=trifluoromethyl"

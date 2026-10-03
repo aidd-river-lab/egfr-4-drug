@@ -1,0 +1,165 @@
+# ============================================================
+# 路线A：SHP2/SOS1变构抑制剂（联用EGFR TKI，覆盖下游旁路耐药）
+#
+# 和路线C(四代EGFR TKI/C797S)的本质区别：这个项目不针对某个EGFR突变本身，而是
+# 作为EGFR TKI的联用搭档，覆盖奥希替尼耐药后通过下游RAS-MAPK通路重新激活逃逸的
+# 那部分病人(MET扩增/HER2扩增/PIK3CA突变/RAS通路其他旁路重新激活，合计约25-30%，
+# 见 doc/competitive-landscape.md)。这是"收敛点"打法：不追某一个7%的分片，
+# 打一个能同时覆盖好几个分片的下游节点。
+# ============================================================
+
+project:
+  name: "SHP2/SOS1变构抑制剂(联用EGFR TKI)"
+  design_doc: "doc/routes/route-a-shp2-sos1.md"
+  owner: "River"
+  last_updated: "2026-10-03"
+  status_note: "可及人群是按耐药机制分型，不是按EGFR突变分型——这是和路线C最大的结构性差异"
+
+# ------------------------------------------------------------
+# 0.1 靶点：SHP2(PTPN11)变构tunnel位点为主攻，SOS1为backup
+#
+# 真实结构基础(已核实，见doc/competitive-landscape.md的引用来源，不是编的)：
+#   SHP2: PDB 5EHR(SHP099/SHP2复合物，"tunnel"位点，由N-SH2/C-SH2/PTP三域组成，
+#         关键残基Phe113/Arg111/Glu250)；PDB 7XBQ(共价片段图谱，备查)
+#   SOS1: PDB 6SCM(BI-3406，紧邻RAS^cat对接界面的浅疏水口袋)；
+#         PDB 1NVU(催化位点参考结构)；PDB 7AVI
+# ------------------------------------------------------------
+target:
+  primary:
+    id: SHP2_tunnel
+    protein: "PTPN11 (SHP2)"
+    pocket_description: "N-SH2/C-SH2/PTP三域组成的变构tunnel位点，结合后稳定SHP2的自抑制构象"
+    reference_pdb: ["5EHR", "7XBQ"]
+    key_residues: ["Phe113", "Arg111", "Glu250"]
+    clinical_precedent: >
+      TNO155(Novartis)/RMC-4630(Revolution Medicines)，均为同一tunnel位点的变构抑制剂，
+      已进入临床，但该领域仍处早期——TNO155单药在118例重度预处理患者中仅20%达到疾病稳定，
+      联用策略的真实疗效尚未被充分证实(不是"已验证靶点+成熟方法学"这种乐观表述能完全概括的)。
+  backup:
+    id: SOS1_catalytic_adjacent_cleft
+    protein: "SOS1"
+    pocket_description: "紧邻RAS催化结合界面的浅疏水口袋，阻断SOS1-KRAS相互作用"
+    reference_pdb: ["6SCM", "1NVU", "7AVI"]
+    key_residues: ["His905"]
+    clinical_precedent: "BI-3406(Boehringer Ingelheim)；其前体BI-68BS最初是EGFR项目的产物"
+
+# ------------------------------------------------------------
+# 0.2 可及人群：按奥希替尼耐药后的下游旁路机制分型，不是EGFR突变分型
+# ------------------------------------------------------------
+resistance_mechanisms_covered:
+  primary:
+    - id: MET_amplification
+      label: "MET扩增/高表达"
+      est_prevalence_pct: 15
+      clinical_context: "SAVANNAH/SACHI已证明savolitinib+osimertinib对这部分病人有效(mPFS约8.2个月)；本项目是从下游收敛点覆盖同一群体的另一条路，不是重复造轮子"
+    - id: HER2_amplification
+      label: "HER2扩增"
+      est_prevalence_pct: 5
+    - id: PIK3CA_mutation
+      label: "PIK3CA突变"
+      est_prevalence_pct: 5
+    - id: RAS_pathway_other_reactivation
+      label: "RAS-MAPK通路其他旁路重新激活(含部分未知机制里实际是RAS通路代偿的病例)"
+      est_prevalence_pct: 5
+  counter_screen:
+    - id: PTPN6
+      label: "SHP1(PTPN6)"
+      role: "反靶点：SHP2最近的同源旁系基因，变构tunnel高度相似——这是本项目选择性工作的核心难点，比路线C的EGFR-WT选择性更难，因为口袋相似度更高"
+    - id: PTP1B
+      label: "PTP1B"
+      role: "脱靶参考"
+
+# ------------------------------------------------------------
+# 0.3 化学路线：两者都是非共价变构抑制剂，不涉及共价弹头
+# ------------------------------------------------------------
+chemistry_route:
+  primary: "allosteric_shp2_tunnel"
+  backup: "allosteric_sos1_cleft"
+  notes: "非共价变构抑制，core/covalent.py 在本路线下不启用"
+  covalent_warhead_enabled: false
+
+# ------------------------------------------------------------
+# 0.4 TPP：注意最后三行是"联用设计"专属指标，三条路线统一新增
+# (用户原话："从第一天起就按联用设计，不要按单药设计")
+# ------------------------------------------------------------
+tpp:
+  - metric: biochem_ic50_shp2_nm
+    label: "SHP2磷酸酶活性抑制IC50"
+    minimum: 500
+    target: 50
+    direction: lower_is_better
+    unit: nM
+    computed_by: "对接+FEP相对结合自由能(变构位点结构清楚、共晶多，FEP友好)"
+
+  - metric: shp1_selectivity_fold
+    label: "SHP1选择性"
+    minimum: 10
+    target: 50
+    direction: higher_is_better
+    unit: "倍"
+    computed_by: "炼金突变ΔΔΔG，见core/selectivity.py——tunnel位点残基高度保守，这是本项目最吃计算化学功力的地方"
+
+  - metric: combo_cell_ic50_nm
+    label: "联用EGFR TKI后的细胞活性(MET扩增/HER2扩增模型)"
+    minimum: 200
+    target: 50
+    direction: lower_is_better
+    unit: nM
+    computed_by: "细胞pIC50模型，必须在联用背景下测定，不是单药活性"
+
+  - metric: oral_bioavailability_pct
+    label: "口服暴露(大鼠F%)"
+    minimum: 20
+    target: 40
+    direction: higher_is_better
+    unit: "%"
+    computed_by: "溶解度 + Caco-2 + 肝微粒体清除率"
+
+  - metric: molecular_weight
+    label: "分子量"
+    minimum: null
+    target: 450
+    maximum: 520
+    direction: lower_is_better
+    unit: Da
+    computed_by: "RDKit Descriptors.MolWt"
+
+  - metric: cyp_ddi_risk
+    label: "CYP3A4/2C9介导的药物相互作用风险"
+    minimum: null
+    target: "low"
+    direction: qualitative
+    unit: qualitative
+    computed_by: "CYP抑制预测(待接入真实模型)+和已知联用药物(铂类化疗/amivantamab)代谢通路交叉检查"
+
+  - metric: non_overlapping_toxicity
+    label: "与化疗/amivantamab不重叠的毒性谱"
+    minimum: null
+    target: "no new grade>=3 AE overlap"
+    direction: qualitative
+    unit: qualitative
+    computed_by: "结构警示 + 同靶点/同通路已知毒性文献比对，临床前阶段只能定性判断"
+
+  - metric: dosing_compatibility
+    label: "给药方案兼容性(QD、不受食物影响)"
+    minimum: null
+    target: "QD, food-independent"
+    direction: qualitative
+    unit: qualitative
+    computed_by: "溶解度pH依赖性 + 预测口服吸收分数，临床前阶段只能定性判断"
+
+# ------------------------------------------------------------
+# 决策引擎：qualitative方向的三行(cyp_ddi_risk/non_overlapping_toxicity/
+# dosing_compatibility)不进pareto_objectives——load_decision_config_from_target_profile()
+# 会把它们正确归类到skipped_non_monotonic_metrics，这是预期行为，不是bug
+# ------------------------------------------------------------
+decision_engine:
+  pareto_objectives:
+    - biochem_ic50_shp2_nm
+    - shp1_selectivity_fold
+    - combo_cell_ic50_nm
+  batch_quota:
+    exploit_pct: 50
+    explore_pct: 25
+    hypothesis_test_pct: 15
+    control_pct: 10

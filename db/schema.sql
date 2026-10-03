@@ -1,4 +1,12 @@
--- EGFR C797S 四代抑制剂研发管线 —— 数据库schema
+-- EGFR C797S 第四代抑制剂研发管线 —— 数据库schema
+--
+-- 2026-10 更新：仓库从单一路线(四代EGFR TKI/C797S)扩展成三条并行路线
+-- (routes/route_a_shp2_sos1、routes/route_b_degrader、routes/route_c_4th_gen_tki)，
+-- 三条路线共用同一个数据库，靠 compounds.route_id 这一列区分，不用三套schema——
+-- 下游所有表都通过外键挂在compounds下面，不需要在每张表都加route_id列。
+-- 注意：InChIKey的唯一性约束从全局UNIQUE(inchikey)改成了UNIQUE(route_id, inchikey)，
+-- 因为三条路线的化学空间差异很大(变构抑制剂/双功能降解剂/ATP竞争性抑制剂)，
+-- 理论上允许同一个InChIKey在不同路线下各出现一次(虽然实践中概率很低)。
 --
 -- 设计原则(和 core/ 下所有模块一致)：
 --   1. 字段名尽量直接照抄各 core/*.py 里对应 dataclass 的字段名，方便 ORM/脚本直接映射，
@@ -8,6 +16,7 @@
 --      而给默认值。
 --   3. 用 SQLite 方言写(本地单机就能跑，sqlite3 schema.sql 直接建库)；如果以后换
 --      Postgres，主要改动是 AUTOINCREMENT->SERIAL/IDENTITY，CHECK约束基本通用。
+--      生产环境请用 db/schema_mysql.sql。
 --
 -- 建库: sqlite3 egfr4.db < schema.sql
 
@@ -18,16 +27,18 @@ PRAGMA foreign_keys = ON;
 -- ============================================================
 CREATE TABLE compounds (
     compound_id         TEXT PRIMARY KEY,           -- 内部编号，比如 DEMO-001
+    route_id            TEXT NOT NULL DEFAULT 'route_c_4th_gen_tki',  -- route_a_shp2_sos1 / route_b_degrader / route_c_4th_gen_tki
     smiles_canonical    TEXT NOT NULL,
     inchikey            TEXT NOT NULL,
     inchikey_skeleton   TEXT NOT NULL,               -- 前14位，用于忽略立体/电荷的去重查重
     source              TEXT,                        -- 来源：enumeration / literature / vendor / wet_lab
-    scaffold_id         TEXT,                        -- 关联 scaffolds.yaml 里的scaffold名字
+    scaffold_id         TEXT,                        -- 关联该路线rgroup_libraries/scaffolds.yaml里的scaffold名字(路线B是warhead_id，不是scaffold)
     created_at          TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE (inchikey)
+    UNIQUE (route_id, inchikey)
 );
 
 CREATE INDEX idx_compounds_inchikey_skeleton ON compounds (inchikey_skeleton);
+CREATE INDEX idx_compounds_route_id ON compounds (route_id);
 
 -- 标准化时被隔离的记录(core/standardize.py StandardizeResult.quarantine)，
 -- 不进 compounds 表，但要留痕方便回查原始数据有什么问题
