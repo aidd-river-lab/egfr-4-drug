@@ -17,14 +17,15 @@
 这个工作流，位置见本文件最后的 TODO 注释。
 
 用法：
-    .venv/bin/python -m workflows.run_discovery_round                          # 路线C(默认)
+    .venv/bin/python -m workflows.run_discovery_round                          # 路线C(默认)，不落库
     .venv/bin/python -c "from workflows.run_discovery_round import run; run(route_id='route_a_shp2_sos1', scaffold_id='demo_aminopyrazine_tunnel')"
+    .venv/bin/python -c "from workflows.run_discovery_round import run; run(persist=True)"  # 需要项目根目录下有.env(见.env.example)
 """
 from __future__ import annotations
 
 import pandas as pd
 
-from core.admet import compute_cns_mpo, compute_descriptors, run_structural_alerts
+from core.admet import compute_cns_mpo, compute_descriptors, estimate_herg_risk_proxy, run_structural_alerts
 from core.decide import DesirabilitySpec, desirability_score, pareto_front, select_batch
 from core.enumerate import enumerate_from_scaffold
 from core.route_config import route_config_dir
@@ -36,8 +37,24 @@ DEFAULT_SCAFFOLD_BY_ROUTE = {
     "route_c_4th_gen_tki": "demo_aminopyrimidine_biphenyl",
 }
 
+# compound_id前缀按route_id走，不能按scaffold_id截断生成——这里曾经真实踩过一个坑：
+# "demo_aminopyrazine_tunnel"[:12] 和 "demo_aminopyrimidine_biphenyl"[:12] 都是
+# "demo_aminopy"，导致路线A和路线C生成了同一批compound_id("demo_aminopy-0000"等)，
+# 落库时两条路线的分子在compounds表里(PRIMARY KEY只有compound_id)互相覆盖，
+# route_id字段显示的是先插入那条路线的、但smiles_canonical却是后插入那条路线的——
+# 一次真实的跨路线数据污染事故。现在按route_id生成前缀，不同路线永远不会撞ID。
+COMPOUND_ID_PREFIX_BY_ROUTE = {
+    "route_a_shp2_sos1": "RTA",
+    "route_c_4th_gen_tki": "RTC",
+}
 
-def run(route_id: str = "route_c_4th_gen_tki", scaffold_id: str | None = None, batch_size: int = 20) -> pd.DataFrame:
+
+def run(
+    route_id: str = "route_c_4th_gen_tki",
+    scaffold_id: str | None = None,
+    batch_size: int = 20,
+    persist: bool = False,
+) -> pd.DataFrame:
     scaffold_id = scaffold_id or DEFAULT_SCAFFOLD_BY_ROUTE[route_id]
     config_dir = route_config_dir(route_id)
     report_lines = [f"[路线] {route_id}"]
@@ -45,6 +62,7 @@ def run(route_id: str = "route_c_4th_gen_tki", scaffold_id: str | None = None, b
     # ---- 环节3: 枚举 ----
     enumerated = enumerate_from_scaffold(scaffold_id, config_dir=config_dir)
     report_lines.append(f"[环节3 枚举] {scaffold_id} -> {len(enumerated)} 个连通、去重后的候选SMILES")
+    r_group_cols = [c for c in enumerated.columns if c.endswith("_name")]
 
     # ---- 环节1: 标准化 + 去重(InChIKey) ----
     std_result = standardize_batch(enumerated["smiles"].tolist())
@@ -53,16 +71,26 @@ def run(route_id: str = "route_c_4th_gen_tki", scaffold_id: str | None = None, b
         f"(success_rate={std_result.success_rate:.1%})"
     )
     curated = std_result.curated.drop_duplicates(subset="inchikey").reset_index(drop=True)
-    curated["compound_id"] = [f"{scaffold_id[:12]}-{i:04d}" for i in range(len(curated))]
+    id_prefix = COMPOUND_ID_PREFIX_BY_ROUTE[route_id]
+    curated["compound_id"] = [f"{id_prefix}-{i:04d}" for i in range(len(curated))]
+    # 带上R基团信息，供 db/repository.py::upsert_designed_molecules() 落库用
+    curated = curated.merge(enumerated[["smiles", *r_group_cols]], left_on="raw_smiles", right_on="smiles", how="left")
 
     # ---- 环节6: ADMET描述符 + CNS MPO + 结构警示 ----
+    # 注意：这一步对curated里**全部**候选计算(包括后面会被REJECT门槛淘汰的)，
+    # 因为落库时这些数据本身是有价值的记录，不应该因为没进最终批次就被丢弃
+    # (见 db/repository.py::persist_discovery_round 的docstring)。
     rows = []
+    alert_hit_rows = []  # (compound_id, rule_name, severity, action, advice)，落库给 structural_alert_hits
     for _, row in curated.iterrows():
         smiles = row["standardized_smiles"]
         desc = compute_descriptors(smiles)
-        mpo = compute_cns_mpo(desc) if desc.get("ok") else {"ok": False, "cns_mpo": None}
+        mpo = compute_cns_mpo(desc) if desc.get("ok") else {"ok": False, "cns_mpo": None, "pass_threshold_4_0": None}
+        herg = estimate_herg_risk_proxy(smiles)
         alerts = run_structural_alerts(smiles)  # 这份demo骨架不走共价路线，不传warhead_smarts
         sa = compute_sa_score(smiles)
+        for h in alerts.hits:
+            alert_hit_rows.append((row["compound_id"], h.rule_name, h.severity, h.action, h.advice))
         rows.append(
             {
                 "compound_id": row["compound_id"],
@@ -70,18 +98,26 @@ def run(route_id: str = "route_c_4th_gen_tki", scaffold_id: str | None = None, b
                 "inchikey": row["inchikey"],
                 "mw": desc.get("mw"),
                 "clogp": desc.get("clogp"),
+                "clogd_approx": desc.get("clogd_approx"),
                 "tpsa": desc.get("tpsa"),
+                "hbd": desc.get("hbd"),
+                "hba": desc.get("hba"),
+                "fsp3": desc.get("fsp3"),
+                "has_basic_aliphatic_amine": desc.get("has_basic_aliphatic_amine"),
+                "pka_proxy": desc.get("pka_proxy"),
                 "cns_mpo": mpo.get("cns_mpo"),
+                "cns_mpo_pass_4_0": mpo.get("pass_threshold_4_0"),
+                "herg_risk_proxy": herg.get("herg_risk_proxy"),
                 "sa_score": sa.get("sa_score"),
                 "alert_verdict": alerts.verdict,
                 "alert_hits": ",".join(h.rule_name for h in alerts.hits) or "none",
             }
         )
-    candidates = pd.DataFrame(rows)
+    all_candidates = pd.DataFrame(rows)
 
-    n_before_gate = len(candidates)
-    rejected = candidates[candidates["alert_verdict"] == "REJECT"].copy()
-    candidates = candidates[candidates["alert_verdict"] != "REJECT"].reset_index(drop=True)
+    n_before_gate = len(all_candidates)
+    rejected = all_candidates[all_candidates["alert_verdict"] == "REJECT"].copy()
+    candidates = all_candidates[all_candidates["alert_verdict"] != "REJECT"].reset_index(drop=True)
     report_lines.append(
         f"[环节6 结构警示硬门] {n_before_gate} -> {len(candidates)} 通过(REJECT淘汰 {len(rejected)} 个)"
     )
@@ -114,6 +150,31 @@ def run(route_id: str = "route_c_4th_gen_tki", scaffold_id: str | None = None, b
     print()
     print("=== 最终批次(combined) ===")
     print(batch.combined[["compound_id", "batch_role", "cns_mpo", "sa_score", "desirability"]].to_string())
+
+    if persist:
+        from db.connect import get_connection
+        from db.repository import persist_discovery_round
+
+        conn = get_connection()
+        try:
+            summary = persist_discovery_round(
+                conn,
+                route_id=route_id,
+                scaffold_id=scaffold_id,
+                enumeration_batch=f"{scaffold_id}-{len(enumerated)}",
+                r_group_cols=r_group_cols,
+                curated_df=curated,
+                quarantine_df=std_result.quarantine,
+                all_candidates_df=all_candidates,
+                alert_hit_rows=alert_hit_rows,
+                batch_combined_df=batch.combined,
+                batch_size=batch_size,
+                quota={"exploit_pct": 50, "explore_pct": 25, "hypothesis_test_pct": 15, "control_pct": 10},
+            )
+            print("\n=== 已落库(MySQL) ===")
+            print(summary)
+        finally:
+            conn.close()
 
     return batch.combined
 

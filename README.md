@@ -79,10 +79,14 @@ workflows/
   run_discovery_round.py          路线A/C共用：枚举->标准化->ADMET->决策
   run_bifunctional_round.py       路线B专属：三组分枚举->标准化->ADMET画像
 
-tests/                           75个pytest单测，覆盖所有"真实可跑"模块+三路线配置校验+关键回归场景
+tests/                           86个pytest单测，覆盖所有"真实可跑"模块+三路线配置校验+DB写入逻辑+关键回归场景
 db/
-  schema_mysql.sql                MySQL 8.0+ schema(推荐，生产环境用这个)，三路线共用，靠route_id列区分
+  schema_mysql.sql                MySQL schema(生产环境用这个)，三路线共用，靠route_id列区分
   schema.sql                      SQLite版，仅用于不想起MySQL server时的快速本地校验
+  connect.py                       从.env读取凭证返回数据库连接
+  repository.py                    workflows算出来的DataFrame -> 写入MySQL对应表(幂等upsert)
+
+.env.example                      数据库凭证模板，复制成.env填真实值(.env已在.gitignore里)
 
 doc/
   00-design-overview.md           总览：三路线对比 + 共享引擎架构
@@ -129,7 +133,13 @@ sqlite3 egfr4.db < db/schema.sql
 # 5. 路线B端到端工作流(三组分枚举+ADMET画像；决策阶段诚实缺位，见该文件docstring)
 .venv/bin/python -m workflows.run_bifunctional_round
 
-# 6. 单独跑某个模块的演示(每个core/*.py都有可独立运行的__main__演示)
+# 6. 把计算结果写进数据库：复制 .env.example 为 .env 填真实凭证，三个workflow都支持 persist=True
+cp .env.example .env   # 填真实的 DB_HOST/DB_USER/DB_PASSWORD
+.venv/bin/python -c "from workflows.run_discovery_round import run; run(persist=True)"                               # 路线C
+.venv/bin/python -c "from workflows.run_discovery_round import run; run(route_id='route_a_shp2_sos1', persist=True)"  # 路线A
+.venv/bin/python -c "from workflows.run_bifunctional_round import run; run(persist=True)"                            # 路线B
+
+# 7. 单独跑某个模块的演示(每个core/*.py都有可独立运行的__main__演示)
 .venv/bin/python -m core.standardize
 .venv/bin/python -m core.admet
 .venv/bin/python -m core.decide
@@ -138,6 +148,35 @@ sqlite3 egfr4.db < db/schema.sql
 .venv/bin/python -m core.ternary_complex
 .venv/bin/python -m core.route_config
 ```
+
+## 数据库落库说明
+
+三个workflow(`run_discovery_round.py`路线A/C、`run_bifunctional_round.py`路线B)
+都支持`persist=True`，把算出来的结果写进`.env`指定的MySQL。写入逻辑在
+`db/repository.py`，和`core/`的计算逻辑完全解耦。
+
+**写什么、不写什么**：只有当前workflow真实算出来的东西才落库——
+`compounds`/`designed_molecules`/`admet_descriptors`/`structural_alert_hits`/
+`synthesis_records`，路线A/C还有`decision_rounds`/`decision_batch_members`
+(路线B还没有决策阶段，这两张表不写)。`structure_ensemble`/`funnel_scores`/
+`fep_maps`等表目前是空的——因为对应的计算环节(真实对接/MD/FEP)在本环境里是
+诚实占位、没有真的跑，没有真实数据就不写假行，和整个项目的原则一致。
+
+**重跑幂等**：`compounds`/`admet_descriptors`/`synthesis_records`用
+`INSERT...ON DUPLICATE KEY UPDATE`，重跑会覆盖成最新值，不会越跑越多重复行；
+`structural_alert_hits`每次重跑先删除旧记录再插入新的；`decision_rounds`每次
+生成一个带时间戳的新round_id，天然不冲突。
+
+**一个真实的事故记录**：接入DB的过程中，`compound_id`生成逻辑原本是按
+`scaffold_id[:12]`截断，结果路线A的`demo_aminopyrazine_tunnel`和路线C的
+`demo_aminopyrimidine_biphenyl`截断后都是`demo_aminopy`，两条路线生成了同一批
+compound_id，upsert时(compounds表的PRIMARY KEY只有compound_id)互相覆盖了对方
+的分子数据——一次真实的跨路线数据污染。修复方式：
+1. `workflows/run_discovery_round.py`：compound_id前缀改成按`route_id`生成
+   (`RTA-`/`RTC-`/`RTB-`，不同路线永远不会撞ID)；
+2. `db/repository.py::upsert_compounds()`加了一道防线：写入前检查
+   compound_id是否已经属于别的route_id，是就直接报错(`CrossRouteCollisionError`)
+   而不是静默覆盖。
 
 ## 文档索引
 
@@ -184,6 +223,14 @@ sqlite3 egfr4.db < db/schema.sql
    `chemistry_route`枚举从字母(A/B/C/D)改成描述性slug，避免和本次新增的
    "路线A/B/C"三路线框架产生命名混淆（见
    `doc/routes/route-c-4th-gen-tki.md`）。
+8. **`compound_id`按`scaffold_id`截断生成，导致路线A/C撞ID、互相覆盖对方的
+   分子数据**——一次真实的跨路线数据污染，接入MySQL持久化时才暴露。已修复
+   (compound_id改按route_id生成前缀)并在`db/repository.py`加了一道
+   `CrossRouteCollisionError`防线（见上面"数据库落库说明"一节）。
+9. **MySQL的`decision_rounds.round_id`列宽度不够，长round_id被静默截断**——
+   MySQL默认非严格模式下VARCHAR超长不报错，只是悄悄截断，两次插入因为截断后
+   恰好撞了同一个值而表面上"看起来正常工作"。已把相关round_id列从
+   VARCHAR(32)加宽到VARCHAR(48)。
 
 ## 数据库选型：MySQL/Redis/ES是否需要接入
 

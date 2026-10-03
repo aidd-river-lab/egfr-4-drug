@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+
+# 数据库凭证——真实密码/host绝不能进git历史
+.env
+.env.*
+db/*.local.sql

@@ -268,7 +268,7 @@ CREATE TABLE synthesis_records (
 -- 环节8：多目标决策(core/decide.py 的输出留痕，不存算法本身)
 -- ============================================================
 CREATE TABLE decision_rounds (
-    round_id            VARCHAR(32) PRIMARY KEY,           -- 比如 "2026-W40"
+    round_id            VARCHAR(48) PRIMARY KEY,           -- 比如 "route_c_4th_gen_tki-20261003134032"(route_id+时间戳，db/repository.py生成)
     round_date          DATE NOT NULL,
     batch_size          INT NOT NULL,
     quota_json          JSON,                               -- 当轮用的 exploit/explore/hypothesis/control 配额
@@ -276,7 +276,7 @@ CREATE TABLE decision_rounds (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE decision_batch_members (
-    round_id            VARCHAR(32) NOT NULL,
+    round_id            VARCHAR(48) NOT NULL,
     compound_id         VARCHAR(64) NOT NULL,
     batch_role          VARCHAR(16) NOT NULL,
     is_pareto_optimal   TINYINT(1),
@@ -397,7 +397,7 @@ CREATE TABLE rule_precision_history (
 
 -- 前瞻验证时间序列(环节9.2第4条)
 CREATE TABLE prospective_validation_rounds (
-    round_id            VARCHAR(32) PRIMARY KEY,
+    round_id            VARCHAR(48) PRIMARY KEY,
     round_date          DATE NOT NULL,
     model_version       VARCHAR(32) NOT NULL,
     n_compounds         INT NOT NULL,
