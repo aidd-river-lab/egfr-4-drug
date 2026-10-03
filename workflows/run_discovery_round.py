@@ -183,7 +183,7 @@ if __name__ == "__main__":
     run()
 
 # TODO(有算力/数据后按这里接入，不要改动上面已验证的逻辑):
-#   - 环节2: core/structures.py fetch_pdb + mutate_residue_stub -> 产出 StructureEnsembleMember 列表
+#   - 环节2: core/structures.py fetch_pdb + mutate_residue(需要.venv310) -> 产出 StructureEnsembleMember 列表
 #   - 环节4 L1-L2: 对每个candidates["smiles"] x 每个ensemble成员跑 core/docking.py run_vina_docking
 #   - 环节4 L3-L4: core/md_stability.py / core/mmgbsa.py / core/fep.py，只对L2晋级的子集跑
 #   - 环节4.3: 如果chemistry_route是covalent_new_site/covalent_pan_mutant_broad，core/covalent.py evaluate_attack_geometry

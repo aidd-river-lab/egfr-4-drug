@@ -65,18 +65,61 @@ class StructureEnsembleMember:
     notes: str = ""
 
 
-def mutate_residue_stub(structure_path: str, resnum: int, new_resname: str) -> dict:
+def mutate_residue(
+    structure_path: str, chain: str, resnum: int, new_aa_one_letter: str, out_path: str, pack_radius: float = 8.0
+) -> dict:
     """
-    环节2.2第2步：突变建模的占位接口。
-    真实流程需要 Rosetta 或 Maestro 的 residue mutation + 局部能量最小化，本环境未安装
-    这类软件，不做简单的"把残基名字段改掉"这种会产出物理上不合理结构的伪实现。
+    环节2.2第2步：真实的点突变建模(2026-10起不再是纯占位)。
+
+    用 PyRosetta 的 mutate_residue()：换残基身份 + 以pack_radius(Å)为半径对周围
+    侧链做局部repacking，不是简单的"把PDB文本里的残基名字段改掉"那种会产出物理上
+    不合理结构(侧链和周围原子重叠)的伪实现。
+
+    主.venv(Python 3.9)装不了PyRosetta，这里用lazy import——import这个模块本身
+    不会报错，只有真正调用且当前解释器没装pyrosetta时才诚实返回ok=False。
+    真实调用必须用`.venv310/bin/python`(见 scripts/setup_docking_env.sh，
+    PyRosetta的安装方式见该脚本或doc/routes/route-c-4th-gen-tki.md的记录——
+    注意pyrosetta-installer内部调用裸`pip`而不是`sys.executable -m pip`，
+    如果PATH上别的Python版本的pip排在前面会装错环境，需要显式把目标venv的
+    bin目录放到PATH最前面)。
+
+    new_aa_one_letter: 单字母氨基酸代码(PyRosetta的约定，不是三字母)。
     """
+    try:
+        import pyrosetta
+        from pyrosetta.toolbox.mutants import mutate_residue as _pyrosetta_mutate
+    except ImportError as exc:
+        return {
+            "ok": False,
+            "reason": f"需要PyRosetta做突变建模+局部repacking，当前解释器未安装: {exc}",
+            "structure_path": structure_path,
+            "resnum": resnum,
+            "new_aa_one_letter": new_aa_one_letter,
+        }
+
+    pyrosetta.init("-mute all")
+    pose = pyrosetta.pose_from_pdb(structure_path)
+    pdb_info = pose.pdb_info()
+    pose_idx = pdb_info.pdb2pose(chain, resnum)
+    if pose_idx == 0:
+        return {"ok": False, "reason": f"链{chain}里找不到PDB残基编号{resnum}", "structure_path": structure_path}
+
+    original_resname = pose.residue(pose_idx).name3()
+    _pyrosetta_mutate(pose, pose_idx, new_aa_one_letter, pack_radius=pack_radius)
+    new_resname = pose.residue(pose_idx).name3()
+
+    scorefxn = pyrosetta.get_fa_scorefxn()
+    score_after = scorefxn(pose)
+
+    pose.dump_pdb(out_path)
     return {
-        "ok": False,
-        "reason": "需要 Rosetta/Maestro 做突变建模+局部能量最小化，本环境未安装，不做文本替换式的伪突变",
-        "structure_path": structure_path,
+        "ok": True,
+        "chain": chain,
         "resnum": resnum,
+        "original_resname": original_resname,
         "new_resname": new_resname,
+        "total_score_after_repacking": round(score_after, 1),
+        "out_path": out_path,
     }
 
 

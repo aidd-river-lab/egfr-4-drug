@@ -1,6 +1,8 @@
 # .venv310 的真实安装记录，供复现参考。不要直接 pip install -r 这个文件——
 # vina 在PyPI上没有macOS wheel，必须用 scripts/setup_docking_env.sh 从源码编译
-# (该脚本会处理Boost路径/C++标准/swig这几个真实的坑)。这个文件只是版本参考。
+# (该脚本会处理Boost路径/C++标准/swig这几个真实的坑)；PyRosetta也不是常规pip包
+# (pyrosetta-installer会从RosettaCommons自己的服务器下载，且内部调用裸pip有PATH
+# 坑，见setup_docking_env.sh注释)。这个文件只是版本参考。
 rdkit==2026.3.6
 pandas==2.3.3
 numpy==2.2.6
@@ -9,4 +11,5 @@ PyYAML==6.0.3
 gemmi==0.7.5
 meeko==0.8.0
 vina==1.2.7  # 从源码编译，见 scripts/setup_docking_env.sh
+pyrosetta==2026.39  # 用pyrosetta-installer装，见 scripts/setup_docking_env.sh
 pymysql==1.2.3

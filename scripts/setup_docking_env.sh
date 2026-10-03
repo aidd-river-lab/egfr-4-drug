@@ -40,11 +40,32 @@ export CONDA_PREFIX=$(brew --prefix boost)
 .venv310/bin/pip install -q "$WORKDIR/vina-${VINA_VERSION}"
 rm -rf "$WORKDIR"
 
-echo "=== 4. 验证 ==="
-.venv310/bin/python -c "from vina import Vina; import meeko; print('meeko + vina 都能正常import')"
+echo "=== 4. 安装 PyRosetta(点突变建模用，core/structures.py::mutate_residue()) ==="
+# pyrosetta-installer内部用subprocess调用裸`pip`(不是`sys.executable -m pip`)，
+# 如果PATH上排在前面的pip指向别的Python版本(比如装了miniconda)，会把PyRosetta
+# 装错环境、拿到不匹配的wheel报"not a supported wheel on this platform"——
+# 显式把.venv310/bin塞到PATH最前面，强制它用这个venv自己的pip。
+.venv310/bin/pip install -q pyrosetta-installer
+PATH="$(pwd)/.venv310/bin:$PATH" .venv310/bin/python -c "
+import pyrosetta_installer
+pyrosetta_installer.install_pyrosetta()
+"
+
+echo "=== 5. pymysql(写DB用) ==="
+.venv310/bin/pip install -q pymysql
+
+echo "=== 6. 验证 ==="
+.venv310/bin/python -c "
+from vina import Vina
+import meeko
+import pyrosetta
+pyrosetta.init('-mute all')
+print('meeko + vina + pyrosetta 都能正常import')
+"
 
 echo ""
 echo "完成。用法示例："
 echo "  .venv310/bin/mk_prepare_receptor.py --read_pdb xxx.pdb -o receptor --allow_bad_res --default_altloc A -p"
 echo "  .venv310/bin/mk_prepare_ligand.py -i xxx.sdf -o ligand.pdbqt"
 echo "  .venv310/bin/python -c \"from core.docking import run_vina_docking; ...\""
+echo "  .venv310/bin/python -c \"from core.structures import mutate_residue; ...\""

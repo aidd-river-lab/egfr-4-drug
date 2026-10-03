@@ -82,6 +82,54 @@ evaluate_hook_effect_risk(warhead_kd_nm=100, e3_ligand_kd_nm=3100, dose_range_nm
 数据是真的，warhead那一半还是假设值，hook effect可以演示逻辑但不能用于
 真实决策。
 
+## 2026-10补充：三元复合物几何筛选真实跑了一次，找到一个真实的负向发现
+
+放弃完整复刻PRosettaC发表论文的确切流程(需要PatchDock+完整Rosetta C++套件+
+PyMOL+HPC调度系统，这些在单台Mac上不现实)，改用PyRosetta自带的刚体对接协议
+(`RigidBodyRandomizeMover` + `FaDockingSlideIntoContact`，不需要PatchDock/
+调度系统)搭了一个更轻量的几何筛选版本：
+
+1. 真实蛋白-蛋白对接：EGFR(6LUD来源) vs CRBN(4TZ4来源)，两条链都是标准氨基酸，
+   不需要把warhead/来那度胺参数化成Rosetta自定义残基类型(这条路线试过，
+   碰到`RDMolToRestype`需要先转换成PyRosetta自己编译的RDKit绑定对象，
+   比标准Python rdkit.Chem.Mol多一层转换，文档稀少；后来改用Rosetta原生的
+   `SDFParser`+`convert_to_ResidueType`路径验证能解析分子，但构建完整可用的
+   自定义ligand residue还需要更多工作——这条路线最终放弃，不是做不到，是
+   工程代价远超当前阶段需要)。
+2. 用`core/ternary_complex.py::kabsch_rigid_transform()`(纯numpy的Kabsch算法)
+   在"蛋白链对接前后CA坐标的变化"里反推出刚体变换，再把这个变换套用在
+   配体的exit vector原子上——这样完全不需要把配体做成Rosetta能懂的残基，
+   只用蛋白骨架的坐标就能追踪配体跟着挪到哪了。
+3. warhead的exit vector：真实对接进EGFR口袋拿到的3D坐标(用碘原子临时标记
+   连接点，docking后按元素唯一定位，不会被原子重排搞乱)。
+4. 来那度胺的exit vector：4TZ4真实晶体结构里的N17原子(靠原子间距离推断连接关系
+   确认的，不是读PDB原子名瞎猜的——N17只连了一个重原子C14，是经典的末端
+   芳香胺模式，和来那度胺的4-氨基异二氢吲哚酮结构精确吻合)。
+5. 每根linker的真实span：用RDKit生成50个MMFF优化构象，测连接点间距离分布
+   (不是凭经验猜的数字)——peg1 2.5-5.9Å，peg2 4.3-8.7Å，peg3 6.7-11.9Å，
+   triazole_short 5.6-8.1Å，alkyl_c4 2.0-4.6Å。
+
+**真实跑出来的结果**：500次独立随机刚体对接+滑入接触，exit vector距离最小
+只有26.8Å，中位数56.4Å——**0/500次落进任何一根linker的真实span范围内**。
+
+这是一个真实、有统计量支撑的负向发现，不是bug：均匀随机的刚体朝向采样，
+两个蛋白表面上各自很窄的exit vector朝向恰好对上的概率天然很低。这正是
+真实PRosettaC论文要用PatchDock(系统性穷举表面形状互补的补丁，不是均匀随机
+采样)而不是随机对接的原因——本仓库这次没有完整复刻那条路径，验证到的是
+"轻量版行不通"这个真实的工程结论，而不是"三元复合物不存在"。
+
+要让这条路线真正跑通，下一步大概率需要：
+- 用已知的exit vector大致方向(而不是整个蛋白表面)去约束初始刚体朝向的采样范围，
+  不再是均匀随机
+- 或者接受更重的方案(真的装PatchDock——需要解决macOS兼容性；或者用已经装好的
+  PyMOL+现有工具自己写一个表面形状互补的候选姿态生成器)
+
+`core/ternary_complex.py`里新增的`run_protein_protein_docking_trials()`/
+`evaluate_ternary_complex_geometry()`/`measure_linker_span()`/
+`kabsch_rigid_transform()`都是可复用的真实函数(lazy import PyRosetta，
+纯数学部分不需要)，不是这一次性脚本——下次换更好的采样策略时，这些函数
+都能直接复用。
+
 ## 运行
 
 ```bash

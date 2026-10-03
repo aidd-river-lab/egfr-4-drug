@@ -3,20 +3,36 @@
 
 二元对接(warhead结合EGFR、E3配体结合CRBN)只是必要条件，不是充分条件——
 真正决定降解效率的是三元复合物能不能形成，以及形成时warhead/E3配体的结合界面
-会不会互相干扰(负协同)还是互相促进(正协同)。这是二元对接完全捕捉不到的，
-需要PRosettaC/Rosetta这类专门做蛋白-蛋白-小分子三元复合物对接的工具，本环境
-未安装，run_ternary_complex_stub()诚实占位。
+会不会互相干扰(负协同)还是互相促进(正协同)。这是二元对接完全捕捉不到的。
 
-本模块真实、可测试的部分：hook effect(钩状效应)判定。这是双功能降解剂公认的
-真实药理学现象——高浓度下warhead和E3配体各自的二元结合各自趋于饱和，
-反而会让"同一个蛋白同时结合两边"的三元复合物比例下降，剂量-响应曲线呈钟形
-而不是单调递增。这条判据是纯浓度/平衡常数的数学关系，不需要真的跑过三元复合物
-3D预测就能验证对不对（设计文档外的通用PROTAC药理学原理，见
-doc/routes/route-b-degrader.md 的引用）。
+2026-10更新：不再是纯占位。放弃完整复刻PRosettaC发表论文的确切流程(需要
+PatchDock+完整Rosetta C++套件+PyMOL+HPC调度系统，详见
+doc/routes/route-b-degrader.md的记录)，改用PyRosetta自带的刚体对接协议
+(DockingProtocol家族，不需要PatchDock/调度系统)搭一个更轻量的几何筛选版本——
+原理一样(蛋白-蛋白对接 + linker几何兼容性过滤)，但不是发表论文验证过的确切方法，
+准确度没有benchmark数据支撑。
+
+真实跑过一次(路线B的warhead vs 真实CRBN结构4TZ4)：500次独立随机刚体对接+
+滑入接触，exit vector距离最小只有26.8Å，而最长的linker(peg3)实测span也只有
+11.9Å——**0/500次找到几何兼容的姿态**。这是一个真实、有统计量支撑的发现，不是
+bug：均匀随机的刚体朝向采样，两个蛋白表面上各自很窄的exit vector朝向恰好对上
+的概率天然很低，这正是真实PRosettaC论文要用PatchDock(系统性穷举表面补丁而不是
+均匀随机)而不是随机采样的原因。详见doc/routes/route-b-degrader.md。
+
+本模块里还有两类真实、可测试、不需要PyRosetta就能验证的部分：
+  1. hook effect(钩状效应)判定——双功能降解剂公认的真实药理学现象，纯浓度/
+     平衡常数数学关系。
+  2. measure_linker_span()——纯RDKit构象生成，不需要PyRosetta。
+  3. kabsch_rigid_transform()——纯numpy，把对接前后的刚体变换用在"固定坐标系
+     里追踪一个不属于被对接蛋白链本身的外部参考点(比如配体的exit vector原子)"
+     这个问题上，是上面500次对接实验分析用的核心数学工具。
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable
+
+import numpy as np
 
 
 @dataclass
@@ -68,19 +84,227 @@ def evaluate_hook_effect_risk(
 
 
 def run_ternary_complex_stub(warhead_id: str, e3_ligand_id: str, linker_id: str) -> dict:
-    """占位：真实三元复合物3D预测需要PRosettaC/Rosetta类工具，本环境未安装，不编造cooperativity数值。"""
+    """
+    占位：cooperativity_alpha/DC50/Dmax这几个量需要对三元复合物做能量分解(三元复合物能量
+    对比两个二元复合物各自的能量)，比下面geometry screening这一步贵得多，也还没做。
+    不编造这几个数值。几何筛选(有没有姿态能让linker搭上)见
+    run_protein_protein_docking_trials() + evaluate_ternary_complex_geometry()。
+    """
     return {
         "ok": False,
-        "reason": "需要PRosettaC/Rosetta做蛋白-蛋白-小分子三元复合物对接，本环境未安装，不编造cooperativity_alpha/DC50数值",
+        "reason": "cooperativity_alpha/DC50/Dmax需要三元复合物能量分解，比几何筛选更贵，还没做，不编造数值",
         "warhead_id": warhead_id,
         "e3_ligand_id": e3_ligand_id,
         "linker_id": linker_id,
     }
 
 
+# ------------------------------------------------------------
+# 纯数学/纯RDKit部分：不需要PyRosetta，可以独立测试
+# ------------------------------------------------------------
+def kabsch_rigid_transform(before: np.ndarray, after: np.ndarray) -> Callable[[np.ndarray], np.ndarray]:
+    """
+    Kabsch算法：给定同一组点在"刚体移动前"和"刚体移动后"的坐标，求解最优刚体变换
+    (旋转+平移)，返回一个函数，可以把"移动前坐标系"里任意一点映射到"移动后坐标系"。
+
+    用途：PyRosetta对接时只移动蛋白链本身的原子，配体(比如E3配体的exit vector原子)
+    如果没有被建成Rosetta的Pose的一部分，不会跟着自动移动——这个函数让我们能用
+    "对接前后，蛋白链CA原子的坐标变化"反推出配体应该跟着挪到哪，不需要先把配体
+    参数化成Rosetta residue type（那条路线更复杂，见模块docstring的记录）。
+
+    before/after: (N, 3)的numpy数组，N个点在变换前/后的坐标，一一对应。
+    """
+    before_center, after_center = before.mean(axis=0), after.mean(axis=0)
+    before0, after0 = before - before_center, after - after_center
+    h = before0.T @ after0
+    u, _, vt = np.linalg.svd(h)
+    d = np.sign(np.linalg.det(vt.T @ u.T))
+    correction = np.diag([1.0, 1.0, d])
+    rotation = vt.T @ correction @ u.T
+
+    def transform(point: np.ndarray) -> np.ndarray:
+        return rotation @ (point - before_center) + after_center
+
+    return transform
+
+
+def measure_linker_span(linker_smiles: str, n_conformers: int = 50, random_seed: int = 42) -> dict:
+    """
+    生成n_conformers个构象，测linker两个连接点(裸*标记)之间的真实距离分布——
+    用来判断"对接找到的exit vector距离，这根linker够不够长接上"，不是凭经验猜的数字。
+    纯RDKit，不需要PyRosetta。
+    """
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+
+    mol = Chem.MolFromSmiles(linker_smiles)
+    dummy_idx = [a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() == 0]
+    if len(dummy_idx) != 2:
+        return {"ok": False, "reason": f"linker应该恰好有2个连接点(*)，实际有{len(dummy_idx)}个"}
+
+    mol_h = Chem.AddHs(mol)
+    params = AllChem.ETKDGv3()
+    params.randomSeed = random_seed
+    conf_ids = AllChem.EmbedMultipleConfs(mol_h, numConfs=n_conformers, params=params)
+    if len(conf_ids) == 0:
+        return {"ok": False, "reason": "构象生成失败"}
+    AllChem.MMFFOptimizeMoleculeConfs(mol_h)
+
+    spans = []
+    for cid in conf_ids:
+        conf = mol_h.GetConformer(cid)
+        p1 = np.array(conf.GetAtomPosition(dummy_idx[0]))
+        p2 = np.array(conf.GetAtomPosition(dummy_idx[1]))
+        spans.append(float(np.linalg.norm(p1 - p2)))
+
+    return {
+        "ok": True,
+        "n_conformers": len(spans),
+        "min_span_angstrom": round(min(spans), 1),
+        "max_span_angstrom": round(max(spans), 1),
+        "median_span_angstrom": round(float(np.median(spans)), 1),
+    }
+
+
+# ------------------------------------------------------------
+# 需要PyRosetta的部分：lazy import，主.venv里诚实返回ok=False
+# ------------------------------------------------------------
+def run_protein_protein_docking_trials(
+    combined_pdb_path: str,
+    fixed_chain: str,
+    mobile_chain: str,
+    mobile_chain_external_point_original: tuple[float, float, float],
+    fixed_chain_external_point: tuple[float, float, float],
+    n_trials: int = 100,
+    random_seed: int | None = None,
+) -> dict:
+    """
+    真实的蛋白-蛋白刚体对接采样：随机朝向+滑入接触，重复n_trials次，每次独立。
+    用PyRosetta自带的RigidBodyRandomizeMover + FaDockingSlideIntoContact，
+    不需要PatchDock/完整Rosetta C++套件/HPC调度系统。
+
+    mobile_chain_external_point_original: mobile_chain在**原始(未对接)**坐标系里，
+    某个不属于蛋白链本身的外部参考点坐标(比如E3配体的exit vector原子)——每次对接后，
+    用kabsch_rigid_transform()算出的变换把这个点映射到对接后的坐标系，不需要先把
+    配体参数化成Rosetta residue type。
+    fixed_chain_external_point: fixed_chain侧的对应参考点，因为fixed_chain在对接
+    过程中不移动，这个点全程不变，直接传入即可。
+
+    真实运行过一次（路线B warhead vs 真实CRBN结构4TZ4，n=500）：exit vector最小距离
+    26.8Å，0/500次落进任何一个linker的真实span范围内——这是本函数被设计出来之后
+    第一次真实暴露出来的发现，不是假设性的，见 doc/routes/route-b-degrader.md。
+    """
+    try:
+        import pyrosetta
+        from pyrosetta.rosetta.protocols.docking import FaDockingSlideIntoContact, setup_foldtree
+        from pyrosetta.rosetta.protocols.rigid import Partner, RigidBodyRandomizeMover
+        from pyrosetta.rosetta.utility import vector1_int
+    except ImportError as exc:
+        return {
+            "ok": False,
+            "reason": f"需要PyRosetta做蛋白-蛋白刚体对接，当前解释器未安装: {exc}",
+            "combined_pdb_path": combined_pdb_path,
+        }
+
+    pyrosetta.init("-mute all")
+    base_pose = pyrosetta.pose_from_pdb(combined_pdb_path)
+    movable_jumps = vector1_int()
+    movable_jumps.append(1)
+    setup_foldtree(base_pose, f"{fixed_chain}_{mobile_chain}", movable_jumps)
+    scorefxn = pyrosetta.get_fa_scorefxn()
+
+    mobile_begin, mobile_end = base_pose.chain_begin(2), base_pose.chain_end(2)
+    original_ca = np.array(
+        [
+            [base_pose.residue(i).xyz("CA").x, base_pose.residue(i).xyz("CA").y, base_pose.residue(i).xyz("CA").z]
+            for i in range(mobile_begin, mobile_end + 1)
+        ]
+    )
+    mobile_point_original = np.array(mobile_chain_external_point_original)
+    fixed_point = np.array(fixed_chain_external_point)
+
+    if random_seed is not None:
+        pyrosetta.rosetta.numeric.random.rg().set_seed("mt19937", random_seed)
+
+    trials = []
+    for trial_idx in range(n_trials):
+        pose = pyrosetta.Pose()
+        pose.assign(base_pose)
+        RigidBodyRandomizeMover(pose, 1, Partner.partner_downstream).apply(pose)
+        FaDockingSlideIntoContact(1).apply(pose)
+
+        moved_ca = np.array(
+            [
+                [pose.residue(i).xyz("CA").x, pose.residue(i).xyz("CA").y, pose.residue(i).xyz("CA").z]
+                for i in range(mobile_begin, mobile_end + 1)
+            ]
+        )
+        transform = kabsch_rigid_transform(original_ca, moved_ca)
+        mobile_point_new = transform(mobile_point_original)
+        exit_vector_distance = float(np.linalg.norm(mobile_point_new - fixed_point))
+        trials.append(
+            {"trial": trial_idx, "score": round(scorefxn(pose), 1), "exit_vector_distance_angstrom": round(exit_vector_distance, 1)}
+        )
+
+    trials.sort(key=lambda t: t["exit_vector_distance_angstrom"])
+    return {"ok": True, "n_trials": n_trials, "trials_sorted_by_distance": trials}
+
+
+def evaluate_ternary_complex_geometry(docking_trials_result: dict, linker_max_span_angstrom: float) -> dict:
+    """
+    用run_protein_protein_docking_trials()的结果，判断有没有任何一次对接的exit vector
+    距离落在某个linker真实能达到的span以内(见measure_linker_span())。
+    """
+    if not docking_trials_result.get("ok"):
+        return docking_trials_result
+
+    trials = docking_trials_result["trials_sorted_by_distance"]
+    best = trials[0]
+    compatible_trials = [t for t in trials if t["exit_vector_distance_angstrom"] <= linker_max_span_angstrom]
+    return {
+        "ok": True,
+        "n_trials": docking_trials_result["n_trials"],
+        "best_exit_vector_distance_angstrom": best["exit_vector_distance_angstrom"],
+        "linker_max_span_angstrom": linker_max_span_angstrom,
+        "n_geometrically_compatible_trials": len(compatible_trials),
+        "any_compatible_pose_found": len(compatible_trials) > 0,
+        "note": (
+            "找到了几何兼容的姿态，可以把这几个trial的pose拿去做进一步的界面能量精修"
+            if compatible_trials
+            else f"{docking_trials_result['n_trials']}次独立随机对接里，最好的exit vector距离也有"
+            f"{best['exit_vector_distance_angstrom']}Å，超过linker最大span({linker_max_span_angstrom}Å)——"
+            "均匀随机刚体采样找不到兼容姿态，不代表三元复合物不存在，更可能是采样策略本身的限制"
+            "(真实PRosettaC用PatchDock系统性穷举表面补丁，不是均匀随机)"
+        ),
+    }
+
+
 if __name__ == "__main__":
     print("=== run_ternary_complex_stub (预期 ok=False) ===")
     print(run_ternary_complex_stub("demo_warhead", "lenalidomide_n_linked", "peg2"))
+
+    print("\n=== run_protein_protein_docking_trials (主.venv下预期 ok=False，需要.venv310) ===")
+    print(
+        run_protein_protein_docking_trials(
+            combined_pdb_path="routes/route_b_degrader/structures/egfr_crbn_combined.pdb",
+            fixed_chain="A",
+            mobile_chain="B",
+            mobile_chain_external_point_original=(-45.717, 58.320, -98.517),
+            fixed_chain_external_point=(-47.554, -0.549, -20.829),
+            n_trials=5,
+        )
+    )
+
+    print("\n=== measure_linker_span (纯RDKit，不需要PyRosetta) ===")
+    print("peg2:", measure_linker_span("*CCOCCOCC*"))
+
+    print("\n=== kabsch_rigid_transform 逻辑验证(合成数据：已知的旋转+平移) ===")
+    before = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    translation = np.array([5.0, 3.0, 1.0])
+    after = before + translation  # 纯平移，没有旋转，最简单的可验证场景
+    transform = kabsch_rigid_transform(before, after)
+    test_point = np.array([2.0, 2.0, 2.0])
+    print(f"测试点{test_point}平移后应该是{test_point + translation}，实际算出来是{transform(test_point)}")
 
     print("\n=== evaluate_hook_effect_risk 逻辑验证(合成数据) ===")
     print("安全剂量范围(10-100nM，限制性Kd=50nM):")

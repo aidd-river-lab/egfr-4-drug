@@ -29,27 +29,37 @@ result = clean_chain(raw_path, chain="A", out_path="receptor_A.pdb")
 如果后续要做"保留共晶配体定义对接口袋坐标"或"保留关键结构水"（原设计文档
 环节2.1明确提到结构水对口袋定义的重要性），把这个开关打开即可。
 
-## 诚实占位的部分：突变建模 / MD平衡 / 构象聚类
+## 2026-10更新：突变建模不再是占位，MD平衡/构象聚类仍然是
 
-这三步需要 Rosetta/Maestro（突变建模+局部能量最小化）或 OpenMM/GROMACS+GPU
-（多副本MD平衡，典型配置是20ns×3副本，见 `config/pipeline.yaml` 的
-`funnel.L3.md_length_ns`/`md_replicas`）以及真实轨迹文件（RMSD聚类）。
-本环境都不具备，对应函数诚实返回 `ok=False`：
+`mutate_residue()`现在是真实函数(用PyRosetta做点突变+局部repacking，不是
+"把残基名字段直接改掉"这种会产出物理上不合理结构的伪实现)，lazy import——
+主.venv(Python 3.9)装不了PyRosetta，调用时诚实返回`ok=False`；真实调用需要
+`.venv310/bin/python`(安装方式见`scripts/setup_docking_env.sh`或
+`doc/routes/route-c-4th-gen-tki.md`里的记录)。已经在路线C上真实用过一次：
+把6LUD(三突变体)的T790M突变回野生型T790，得到route C primary genotype
+(L858R/C797S)的第一个真实计算结构，验证过能量(-202.5，比原结构更稳定)和
+突变后身份(790=THR/797=SER/858=ARG全部确认)，详见该路线文档。
 
 ```python
-mutate_residue_stub(structure_path, resnum=797, new_resname="SER")
-# -> {"ok": False, "reason": "需要 Rosetta/Maestro 做突变建模..."}
+from core.structures import mutate_residue
 
+mutate_residue("6lud_receptor_only.pdb", chain="A", resnum=790, new_aa_one_letter="T",
+                out_path="L858R_C797S_model.pdb", pack_radius=8.0)
+# {"ok": True, "original_resname": "MET", "new_resname": "THR",
+#  "total_score_after_repacking": -202.5, "out_path": "..."}
+```
+
+MD平衡/构象聚类这两步仍然是诚实占位，需要 OpenMM/GROMACS+GPU（多副本MD平衡，
+典型配置是20ns×3副本，见 `config/pipeline.yaml` 的
+`funnel.L3.md_length_ns`/`md_replicas`）以及真实轨迹文件（RMSD聚类）：
+
+```python
 run_md_equilibration_stub(structure_path, length_ns=500, n_replicas=3)
 # -> {"ok": False, "reason": "需要OpenMM/GROMACS + GPU跑3条500ns独立轨迹..."}
 
 cluster_representative_stub(trajectory_id, occupancy_threshold_pct=5.0)
 # -> {"ok": False, "reason": "需要真实MD轨迹做RMSD聚类..."}
 ```
-
-这里**没有**做"把残基名字段直接改掉"这种文本替换式的伪突变——那样产出的结构
-在物理上是不合理的（侧链会和周围原子碰撞，键长键角不对），比明确说"没做"更危险，
-因为它看起来像是跑完了一步。
 
 ## 数据模型
 

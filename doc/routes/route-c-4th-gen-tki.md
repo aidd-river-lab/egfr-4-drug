@@ -91,10 +91,33 @@ PDB条目**。现有全部C797S相关晶体结构(6LUD/6LUB/9D3V/9D3W/9XU9/8WD4�
 数据库的`structure_ensemble`表。
 
 **这意味着primary genotype(del19/C797S、L858R/C797S)的结构准备只能走计算
-突变路线**：以6LUD为模板，用`core/structures.py::mutate_residue_stub()`
-把T790M突变回野生型的T790(真实运行需要Rosetta/Maestro做突变建模+局部能量
-最小化，本环境未安装，诚实占位)。这比直接下载一个现成结构要多一步，是
-路线C环节2的真实瓶颈，不是代码没写全。
+突变路线**：以6LUD为模板，把T790M突变回野生型的T790。
+
+## 2026-10补充：primary genotype(L858R/C797S)的计算突变结构已经做出来了
+
+用`pip install pyrosetta-installer`装了真实PyRosetta(有坑：它内部用`subprocess`
+调用裸`pip`而不是`sys.executable -m pip`，如果PATH上排在前面的pip指向别的Python
+版本会装错环境——这台机器上`/Users/river7/miniconda3/bin/pip`排在前面导致第一次
+安装失败，把`.venv310/bin`显式塞到PATH最前面解决)，对6LUD做了真实的计算突变：
+
+```python
+pose = pyrosetta.pose_from_pdb("6lud_receptor_only.pdb")
+pose_idx_790 = pose.pdb_info().pdb2pose('A', 790)
+assert pose.residue(pose_idx_790).name3() == "MET"   # 确认突变前是MET(T790M)
+mutate_residue(pose, pose_idx_790, 'T', pack_radius=8.0)  # 突变回THR，8Å半径局部repacking
+```
+
+验证：突变后790=THR，797=SER(C797S保留)，858=ARG(L858R保留)，全原子能量
+-202.5，比原始三突变体(-190.7)更低更稳定——物理上合理，去掉T790M引入的
+bulky甲硫氨酸应该缓解空间张力，不是巧合。这是路线C primary genotype第一个
+真实(非占位)的结构，存在`L858R_C797S_computational_model.pdb`，已登记进
+`structure_ensemble`表(ensemble_id=`L858R_C797S_pyrosetta_from_6lud`)。
+
+**用这个新结构重新对接了全部12个候选，和三突变体(6LUD原始)对比**：排名
+一致性中等(Spearman rho=0.664, p=0.018，统计显著但不是完美一致)，平均结合能
+只差-0.18 kcal/mol，但个别化合物差异到±0.9 kcal/mol——说明T790M这个gatekeeper
+突变确实会局部改变口袋形状，排名不能跨genotype直接套用，这也是为什么TPP里
+primary/secondary genotype要分开算活性指标，不是什么形式主义。
 
 ## 2026-10补充：拿6LUD(secondary genotype)跑通了真实L1对接
 
