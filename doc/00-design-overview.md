@@ -13,7 +13,9 @@
 全流程，每一步都是真实数字，不用占位符；[13-design-strategy-and-data.md](13-design-strategy-and-data.md)
 讲"网上抓的数据到底分几类、分子怎么从骨架+片段拼出来、为什么是这三条路线"
 这条完整的设计思考过程；[11-industrial-gap-and-roadmap.md](11-industrial-gap-and-roadmap.md)
-讲这个仓库和工业界真实计算药物研发管线的差距、以及接下来具体该怎么做。
+讲这个仓库和工业界真实计算药物研发管线的差距、以及接下来具体该怎么做
+(其中第5节建议的retrospective验证已经真实跑完，结果见
+[14-retrospective-validation-results.md](14-retrospective-validation-results.md))。
 
 ## 2026-10 更新：从单一路线扩展成三条并行路线
 
