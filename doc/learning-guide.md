@@ -327,5 +327,8 @@ SHP2的抑制剂是**变构抑制剂**(见第3.1节)，结合在一个由三个�
 ---
 
 看完这篇之后建议的阅读顺序：[doc/00-design-overview.md](00-design-overview.md)
-(总览) → 按兴趣挑一条路线的文档细看 → 对照着读对应的`core/*.py`源码
-(每个模块的docstring会假设你已经知道这篇文档里的术语)。
+(总览) → [10-pipeline-walkthrough.md](10-pipeline-walkthrough.md)(流程/算法
+深入讲解，代码怎么跑、黑盒打分函数背后是什么数学) → 按兴趣挑一条路线的文档
+细看 → 对照着读对应的`core/*.py`源码(每个模块的docstring会假设你已经知道
+这篇文档里的术语) → [11-industrial-gap-and-roadmap.md](11-industrial-gap-and-roadmap.md)
+(和工业界真实管线的差距、接下来具体要做什么)。

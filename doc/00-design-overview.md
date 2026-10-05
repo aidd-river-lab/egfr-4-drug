@@ -5,6 +5,11 @@
 激酶、共价药、降解剂、ADMET、对接/FEP这些术语讲清楚，再回来看下面的内容
 会顺畅很多。
 
+看完术语速成后，再推荐两篇：[10-pipeline-walkthrough.md](10-pipeline-walkthrough.md)
+是代码实际执行流程的详细走读(每一步调用了什么、黑盒打分函数背后算的是什么
+数学/物理)，[11-industrial-gap-and-roadmap.md](11-industrial-gap-and-roadmap.md)
+讲这个仓库和工业界真实计算药物研发管线的差距、以及接下来具体该怎么做。
+
 ## 2026-10 更新：从单一路线扩展成三条并行路线
 
 本仓库最初只做一件事：四代EGFR TKI(克服C797S耐药)。2026-10做立项前的竞品
