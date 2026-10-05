@@ -330,7 +330,9 @@ SHP2的抑制剂是**变构抑制剂**(见第3.1节)，结合在一个由三个�
 (总览) → [10-pipeline-walkthrough.md](10-pipeline-walkthrough.md)(流程/算法
 深入讲解，代码怎么跑、黑盒打分函数背后是什么数学) → 如果读完还是觉得抓不住，
 看[12-worked-example-walkthrough.md](12-worked-example-walkthrough.md)(全程
-跟两个真实分子走一遍，每一步都是真实数字，没有抽象占位符) → 按兴趣挑一条
-路线的文档细看 → 对照着读对应的`core/*.py`源码(每个模块的docstring会假设你
-已经知道这篇文档里的术语) → [11-industrial-gap-and-roadmap.md](11-industrial-gap-and-roadmap.md)
+跟两个真实分子走一遍，每一步都是真实数字，没有抽象占位符) →
+[13-design-strategy-and-data.md](13-design-strategy-and-data.md)(数据分几类、
+分子怎么从骨架+片段拼出来、为什么是这三条路线——完整的设计思考过程) →
+按兴趣挑一条路线的文档细看 → 对照着读对应的`core/*.py`源码(每个模块的
+docstring会假设你已经知道这篇文档里的术语) → [11-industrial-gap-and-roadmap.md](11-industrial-gap-and-roadmap.md)
 (和工业界真实管线的差距、接下来具体要做什么)。
