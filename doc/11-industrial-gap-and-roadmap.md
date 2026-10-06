@@ -74,7 +74,7 @@
    缺的只是"拿已知答案的数据集去测一次模型本身准不准"这一步——目前整个
    仓库里唯一缺的、但技术上完全可以补的环节正是这个。
 
-   **这一步已经真实跑完，结果见[14-retrospective-validation-results.md](14-retrospective-validation-results.md)**：
+   **这一步已经真实跑完，详细结果见[15-route-specific-gaps-and-next-steps.md](15-route-specific-gaps-and-next-steps.md)**：
    用DUD-E的EGFR数据集(542个真实活性化合物+2000个诱饵分子)跑了一遍，
    AUC=0.69(弱到中等的区分能力，比随机好但没有好很多)，EF@top1%=3.56倍。
    结论是"有保留地通过"——Vina在EGFR上不是瞎猜，但也远没到能精细排序的

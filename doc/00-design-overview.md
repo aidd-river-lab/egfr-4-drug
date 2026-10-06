@@ -19,7 +19,6 @@
      [17-designer-thought-process.md](17-designer-thought-process.md)
    - 想看工业级差距的完整分维度表格、retrospective验证的详细结果、
      三路线各自的缺口排序——[11](11-industrial-gap-and-roadmap.md)/
-     [14](14-retrospective-validation-results.md)/
      [15](15-route-specific-gaps-and-next-steps.md)
    - 想看某条路线的生物学背景——`doc/routes/*.md`
    - 想看某个环节的详细字段/阈值设计——`doc/01`~`doc/09`
@@ -29,13 +28,10 @@
 本仓库最初只做一件事：四代EGFR TKI(克服C797S耐药)。2026-10做立项前的竞品
 核查后(完整记录见[doc/competitive-landscape.md](competitive-landscape.md))，
 发现这是一个竞争激烈、护城河已被部分攻破的赛道——于是仓库扩展成三条**并行**
-研究的路线，不是三选一：
-
-| 路线 | 名称 | 核心思路 | 配置目录 | 详细文档 |
-|---|---|---|---|---|
-| A | SHP2/SOS1变构抑制剂 | 联用EGFR TKI，打下游收敛点(MET/HER2/PIK3CA/RAS通路重新激活，合计25-30%) | `routes/route_a_shp2_sos1/` | [route-a-shp2-sos1.md](routes/route-a-shp2-sos1.md) |
-| B | 突变选择性EGFR降解剂 | 催化式作用机制，同时覆盖C797S和其他靶上突变 | `routes/route_b_degrader/` | [route-b-degrader.md](routes/route-b-degrader.md) |
-| C | 四代EGFR TKI(C797S) | 原始路线，最成熟但竞争最激烈 | `routes/route_c_4th_gen_tki/` | [route-c-4th-gen-tki.md](routes/route-c-4th-gen-tki.md) |
+研究的路线，不是三选一(A=SHP2/SOS1变构抑制剂、B=突变选择性EGFR降解剂、
+C=四代EGFR TKI)。**三条路线各自的核心思路、配置目录、为什么选这个策略，
+见[16-visual-dashboard.md第2节](16-visual-dashboard.md)的图+表，这里不
+重复**。
 
 三条路线**共用同一套计算引擎**(`core/`下12个模块)，区别只在于各自
 `routes/<route_id>/config/`下的配置文件(TPP表、基因型/靶点、骨架、口袋片段库)。
@@ -59,20 +55,10 @@
 
 原设计文档(路线C最初版本，见
 [四代 EGFR (C797S) 抑制剂工业级研发管线设计.md](<四代 EGFR (C797S) 抑制剂工业级研发管线设计.md>))
-把管线分成环节0-9，这套结构现在是三条路线共用的框架：
-
-| 环节 | 名称 | 代码位置 | 状态 | 详细文档 |
-|---|---|---|---|---|
-| 0 | 目标画像(TPP) | `routes/<route>/config/target_profile.yaml` | 配置，真实，三路线各自一份 | 本文件 + 各路线文档 |
-| 1 | 分子标准化 | `core/standardize.py` | **真实可跑**，路线通用 | [01](01-standardization.md) |
-| 2 | 结构系综准备 | `core/structures.py` | 部分真实+占位，路线通用 | [02](02-structure-ensemble.md) |
-| 3 | 类似物枚举 | `core/enumerate.py` | **真实可跑**，含两种拓扑(固定骨架+R基团 / warhead-linker-E3三组分) | [03](03-enumeration.md) |
-| 4 | 多级打分漏斗 | `core/docking.py` `core/mmgbsa.py` `core/md_stability.py` `core/fep.py` `core/covalent.py` `core/ternary_complex.py`(路线B专属) | 部分真实+占位 | [04](04-funnel-docking.md) |
-| 5 | 选择性引擎 | `core/selectivity.py` | 真实数学+占位计算 | [05](05-selectivity.md) |
-| 6 | ADMET/结构警示 | `core/admet.py` | **真实可跑**(有精度边界声明)，规则库全路线共享 | [06](06-admet.md) |
-| 7 | 合成可及性 | `core/synthesis.py` | 部分真实(SA score)+占位 | [07](07-synthesis.md) |
-| 8 | 多目标决策 | `core/decide.py` | **真实可跑** | [08](08-decision.md) |
-| 9 | DMTA回传与规则治理 | `core/feedback.py` | **真实可跑**(schema+分析逻辑) | [09](09-feedback.md) |
+把管线分成环节0-9，这套结构现在是三条路线共用的框架。**每个环节具体是
+什么、代码在哪、真实程度如何，见[16-visual-dashboard.md第3-5节](16-visual-dashboard.md)
+的流程图+技术对照表(更直观)**；逐环节的详细字段/阈值/设计理由在
+`doc/01`~`doc/09`(每篇独立成文，按需查阅，不需要通读)。
 
 doc/01-09这9篇文档描述的是**共享引擎**，不是某条路线专属的——里面的例子
 (奥希替尼、demo骨架)来自路线C，但函数签名和逻辑对三条路线都适用。
@@ -129,7 +115,7 @@ pydantic/scipy/PyYAML/pytest）在本仓库 `.venv`（Python 3.9.6）下已验�
 环境"，已经用这套环境对真实下载的PDB结构(5EHR/6LUD/6SCM/4TZ4/DUD-E的EGFR
 受体)跑出了真实对接分数、真实突变建模、真实蛋白短程MD平衡(见
 [02](02-structure-ensemble.md))、真实retrospective验证
-(见[14](14-retrospective-validation-results.md))、真实逆合成路线搜索
+(详细结果见[15](15-route-specific-gaps-and-next-steps.md))、真实逆合成路线搜索
 (见[07](07-synthesis.md)，真实跑出奥希替尼的4步合成路线，4个起始原料全部
 在ZINC真实库存里)。
 
