@@ -151,7 +151,7 @@ C++套件这类额外的重型软件依赖)，原因和升级路径见对应模�
 # 建库(推荐MySQL；三条路线共用一个库，靠compounds.route_id列区分)
 mysql -u root -p < db/schema_mysql.sql
 
-# 跑测试(112个单测，覆盖所有真实可跑的模块，三条路线的配置都有独立校验)
+# 跑测试(127个单测，覆盖所有真实可跑的模块，三条路线的配置都有独立校验)
 .venv/bin/python -m pytest tests/ -v
 
 # 路线C端到端工作流(默认route_id)

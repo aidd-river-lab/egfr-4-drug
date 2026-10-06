@@ -69,9 +69,10 @@ run(route_id='route_a_shp2_sos1', batch_size=10)
 实际下载+清洗(保留了共晶配体)，存在`routes/route_a_shp2_sos1/structures/`，
 并登记进数据库的`structure_ensemble`表。确认了配体HETATM确实存在
 (5EHR里的5OD=SHP099，23个重原子；6SCM里的L7H=BI-3406，58个重原子)，
-不是空结构。这是环节2到目前为止唯一有真实(非占位)产出的部分——因为SHP2/
-SOS1的真实共晶结构本身就存在，不像路线C的primary genotype那样连结构
-都没有(见`doc/routes/route-c-4th-gen-tki.md`的说明)。
+不是空结构。路线A这一步比路线C更省力：SHP2/SOS1的真实共晶结构本身就
+存在，不需要像路线C的primary genotype那样走计算突变建模(见
+`doc/routes/route-c-4th-gen-tki.md`的说明，那边连晶体结构都没有，只能靠
+PyRosetta计算产出一个近似模型)。
 
 ## 2026-10补充：L1真实对接已跑通，16个候选全部有真实结合能
 
