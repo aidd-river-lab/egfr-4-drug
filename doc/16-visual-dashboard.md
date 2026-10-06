@@ -200,7 +200,8 @@ flowchart TD
     Overview["00-design-overview.md\n架构总览+导航入口"] --> Walk
     Walk["10-pipeline-walkthrough.md\n代码执行流程深入讲解"] --> Example
     Example["12-worked-example-walkthrough.md\n跟两个真实分子走一遍全流程"] --> Strategy
-    Strategy["13-design-strategy-and-data.md\n数据分几类、分子怎么拼、为什么三路线"] --> ThisDoc
+    Strategy["13-design-strategy-and-data.md\n数据分几类、分子怎么拼、为什么三路线"] --> Designer
+    Designer["17-designer-thought-process.md\n真实设计师每一步在想什么\n(下载数据→定策略→画骨架)"] --> ThisDoc
     ThisDoc["（本文档）16-visual-dashboard.md\n一张图看懂全局"]
 
     Overview --> Detail["01~09逐环节详细设计文档\n(字段/阈值/为什么这么设计)"]

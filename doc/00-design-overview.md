@@ -14,6 +14,9 @@
      真实数字——[12-worked-example-walkthrough.md](12-worked-example-walkthrough.md)
    - 想知道数据从哪来、分子怎么从骨架+片段拼出来、三路线战略的完整推导——
      [13-design-strategy-and-data.md](13-design-strategy-and-data.md)
+   - 想知道一个真实药物设计师拿到"奥希替尼耐药"这个任务，每一步具体在
+     想什么、下载的数据到底回答了什么问题、骨架怎么参考已有药物设计出来——
+     [17-designer-thought-process.md](17-designer-thought-process.md)
    - 想看工业级差距的完整分维度表格、retrospective验证的详细结果、
      三路线各自的缺口排序——[11](11-industrial-gap-and-roadmap.md)/
      [14](14-retrospective-validation-results.md)/
