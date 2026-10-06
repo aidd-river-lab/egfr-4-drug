@@ -15,7 +15,9 @@
 这条完整的设计思考过程；[11-industrial-gap-and-roadmap.md](11-industrial-gap-and-roadmap.md)
 讲这个仓库和工业界真实计算药物研发管线的差距、以及接下来具体该怎么做
 (其中第5节建议的retrospective验证已经真实跑完，结果见
-[14-retrospective-validation-results.md](14-retrospective-validation-results.md))。
+[14-retrospective-validation-results.md](14-retrospective-validation-results.md)；
+三条路线各自单独的缺口和优先级排序见
+[15-route-specific-gaps-and-next-steps.md](15-route-specific-gaps-and-next-steps.md))。
 
 ## 2026-10 更新：从单一路线扩展成三条并行路线
 
