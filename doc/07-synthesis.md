@@ -1,6 +1,6 @@
 # 环节7：合成可及性
 
-代码：[`core/synthesis.py`](../core/synthesis.py) · **状态：第一层(SA score)真实可跑，第二层(逆合成)和FTO诚实占位**
+代码：[`core/synthesis.py`](../core/synthesis.py) · **状态：第一层(SA score)真实可跑；第二层(逆合成)2026-10起真实可跑(AiZynthFinder，`.venv310`)；FTO诚实占位(需要真实专利数据库)**
 
 ## 三层筛查设计
 
@@ -30,18 +30,49 @@ SAscore来自RDKit安装目录下的 `Contrib/SA_Score/sascorer.py`——这不�
 决策依据**——这也是为什么 `workflows/run_discovery_round.py` 把它和CNS MPO
 一起喂进 `desirability_score()` 做几何平均，而不是单独用它筛选。
 
-## 第二层：计算机逆合成（诚实占位）
+## 第二层：计算机逆合成
 
-AiZynthFinder需要下载官方预训练的单步反应模型(体积较大)，并配套具体的可购
-建块库，本环境没有安装/配置：
+AiZynthFinder纯pip可装(`.venv310/bin/pip install aizynthfinder`，不需要像
+vina/pyrosetta那样处理Boost/PATH的坑)。真实使用还需要下载官方预训练的
+单步反应模型+可购建块库(USPTO历史反应数据训练的模型+约1700万个真实ZINC
+可购买分子，合计约1.2GB，不随代码库提交)：
+
+```bash
+.venv310/bin/download_public_data validation/aizynth_data
+# 会自动生成 validation/aizynth_data/config.yml 指向下载好的全部模型文件
+```
+
+**2026-10更新：真实跑过一次，不再是占位**。用这套真实模型+建块库对奥希替尼
+(已验证过的真实SMILES)做了一次真实的逆合成搜索：
+
+```python
+from core.synthesis import run_retrosynthesis
+
+run_retrosynthesis(osimertinib_smiles, "validation/aizynth_data/config.yml")
+# {"ok": True, "is_solved": True, "number_of_steps": 4,
+#  "number_of_routes_explored": 100, "number_of_solved_routes": 23, "top_score": 0.975,
+#  "precursors_in_stock": "C=CC(=O)Cl, CNCCN(C)C, COc1cc(F)c([N+](=O)[O-])cc1N,
+#                          Cn1cc(-c2ccnc(Cl)n2)c2ccccc21",
+#  "precursors_not_in_stock": "", "search_time_seconds": 17.5, ...}
+```
+
+20秒内搜索了458个节点，找到99条候选路线、24条完全解析到库存建块的路线，
+最佳路线4步合成、神经网络打分0.975(满分1.0)。**值得注意的一个细节**：
+排名最高的路线里，第一个precursor是`C=CC(=O)Cl`(丙烯酰氯)——这**正是真实
+化学里用来安装丙烯酰胺弹头的标准试剂**，AiZynthFinder从历史反应数据里
+学出来的这条路线和真实合成化学的直觉吻合，不是瞎编的巧合。
+
+**这是真实结果，但要知道它的真实边界**：这是神经网络从USPTO历史反应数据里
+学出来的"看起来合理"的路线，不代表这条路线真的有人验证过能跑通、不代表
+产率好，也不代表这是唯一/最优路线——真实项目里这种结果是给合成化学家的
+起点建议，不是可以直接照做的操作手册，见`run_retrosynthesis()`函数docstring。
+
+主.venv(Python 3.9)没装aizynthfinder，诚实占位：
 
 ```python
 run_retrosynthesis_stub(smiles)
 # {"ok": False, "reason": "AiZynthFinder 未安装/未配置模型...", "route_found": None}
 ```
-
-接入方式（见函数docstring）：`pip install aizynthfinder`，下载官方预训练模型+
-建块库，用 `aizynthfinder.aizynthfinder.AiZynthFinder` 类替换这个函数体。
 
 ## FTO (Freedom to Operate) 检查
 

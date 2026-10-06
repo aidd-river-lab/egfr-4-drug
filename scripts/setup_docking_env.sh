@@ -63,9 +63,33 @@ pyrosetta.init('-mute all')
 print('meeko + vina + pyrosetta 都能正常import')
 "
 
+echo "=== 7. OpenMM + PDBFixer(纯pip装，蛋白短程MD平衡用，core/structures.py::run_protein_equilibration_md()) ==="
+.venv310/bin/pip install -q openmm pdbfixer
+
+echo "=== 7b. AiZynthFinder(纯pip装，真实逆合成路线搜索，core/synthesis.py::run_retrosynthesis()) ==="
+.venv310/bin/pip install -q aizynthfinder
+echo "    还需要下载真实预训练模型+ZINC建块库(约1.2GB，不随代码库提交)："
+echo "    .venv310/bin/download_public_data validation/aizynth_data"
+
 echo ""
 echo "完成。用法示例："
 echo "  .venv310/bin/mk_prepare_receptor.py --read_pdb xxx.pdb -o receptor --allow_bad_res --default_altloc A -p"
 echo "  .venv310/bin/mk_prepare_ligand.py -i xxx.sdf -o ligand.pdbqt"
 echo "  .venv310/bin/python -c \"from core.docking import run_vina_docking; ...\""
 echo "  .venv310/bin/python -c \"from core.structures import mutate_residue; ...\""
+echo "  .venv310/bin/python -c \"from core.structures import run_protein_equilibration_md; ...\""
+echo ""
+echo "注意：配体结合复合物的MD(core/md_stability.py::run_protein_ligand_complex_md())"
+echo "需要openff-toolkit，它需要Python>=3.11或者conda解决一套复杂依赖，pip在.venv310"
+echo "(Python 3.10)里装不了——这部分需要另外的conda环境，见下面第8步。"
+echo ""
+echo "=== 8. (可选)conda环境：配体力场参数化，真实跑蛋白-配体复合物MD需要 ==="
+echo "本仓库复用一个已存在的conda环境(这里示例用名字'bio'，换成你自己的环境名也行)："
+echo "  mamba install -n bio -c conda-forge ambertools openff-toolkit openmm openmmforcefields pdbfixer -y"
+echo "  (用conda classic solver可能要卡在Solving environment几十分钟，强烈建议先装mamba："
+echo "   conda install -n base -c conda-forge mamba -y，再用mamba install，几分钟内能解完)"
+echo "  真实AmberTools的antechamber二进制装在该环境的bin目录下，调用前必须把这个目录"
+echo "  加进PATH(PATH=\"/path/to/envs/bio/bin:\$PATH\")，否则openmmforcefields内部调用"
+echo "  antechamber会报'command not found'。"
+echo "  验证: PATH=\"/path/to/envs/bio/bin:\$PATH\" /path/to/envs/bio/bin/python -c \\"
+echo "    \"from core.md_stability import run_protein_ligand_complex_md; ...\""

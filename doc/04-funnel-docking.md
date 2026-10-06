@@ -1,6 +1,6 @@
 # 环节4：多级打分漏斗 L0-L4
 
-代码：[`core/docking.py`](../core/docking.py) [`core/md_stability.py`](../core/md_stability.py) [`core/mmgbsa.py`](../core/mmgbsa.py) [`core/fep.py`](../core/fep.py) [`core/covalent.py`](../core/covalent.py) · 配置：[`config/pipeline.yaml`](../config/pipeline.yaml) · **状态：L1对接2026-10起真实可跑(见`scripts/setup_docking_env.sh`)；L2质控逻辑真实；L3-L4(MD/FEP)仍是诚实占位，需要GPU**
+代码：[`core/docking.py`](../core/docking.py) [`core/md_stability.py`](../core/md_stability.py) [`core/mmgbsa.py`](../core/mmgbsa.py) [`core/fep.py`](../core/fep.py) [`core/covalent.py`](../core/covalent.py) · 配置：[`config/pipeline.yaml`](../config/pipeline.yaml) · **状态：L1对接2026-10起真实可跑(见`scripts/setup_docking_env.sh`)；L2质控逻辑真实；L3短程小规模MD 2026-10起真实可跑(配体结合复合物，10ps demo)，真实项目量级(15ns×3副本)/L4(FEP)仍是诚实占位，需要GPU**
 
 ## 核心思想：每升一级精度提高一个量级，通量降低两个量级
 
@@ -99,9 +99,34 @@ evaluate_attack_geometry(result)
 
 ## L3：MM-GBSA + MD稳定性
 
-需要真实MD轨迹（`core/structures.py` 的 `run_md_equilibration_stub` 产出，
-但本环境没有GPU跑不出来），`core/mmgbsa.py::run_mmgbsa_stub()` 和
-`core/md_stability.py` 对应函数诚实占位。
+真实项目需要的量级(3副本×20ns)需要GPU，本环境没有，`core/mmgbsa.py::
+run_mmgbsa_stub()` 诚实占位。
+
+**2026-10更新：短程、小规模的真实MD现在能跑了**——`openmm`+`pdbfixer`纯pip
+可装(`.venv310`)；配体结合复合物还需要`openff-toolkit`+`openmmforcefields`+
+真实AmberTools(antechamber二进制)，这几个pip装不了(openff-toolkit需要
+Python≥3.11)，装在一个独立的conda环境里(`mamba install -c conda-forge
+ambertools openff-toolkit openmm openmmforcefields pdbfixer`，详细步骤见
+`scripts/setup_docking_env.sh`第7-8步)。
+
+真实跑过一次：`core/md_stability.py::run_protein_ligand_complex_md()`，
+奥希替尼(**真实6LUD晶体坐标**，不是对接预测的姿态——用
+`AllChem.AssignBondOrdersFromTemplate()`把已验证过的真实SMILES的键级信息
+转移到真实晶体坐标上，比用对接姿态更贴近真实结合模式) + 6LUD受体(C797S
+三重突变)，5051原子，真实能量最小化(526774→-40599 kJ/mol)，真实10ps轨迹，
+配体RMSD轨迹`[1.25, 1.27, 1.36, 1.46, 1.45, 1.92, 1.6, 1.75, 1.86, 1.5]`，
+均值1.54Å，没有发散——**这个真实晶体姿态在短程MD下是稳定的**，和"奥希替尼
+确实能非共价结合C797S突变体，只是结合力不如共价焊接牢"这个已知生物学事实
+一致，没有出现假阳性迹象。
+
+**这证明了工具链本身是通的，不代表"L3已经真实可用"**：这只是10ps的demo，
+真实项目要看的是15ns窗口的均值(pass criteria下面写的2.5Å阈值)，量级差了
+三个数量级；`hinge_hbond_occupancy_pct`/`target_anchor_occupancy_pct`这两个
+字段的真实计算逻辑还没实现(需要按残基名追踪氢键距离，目前诚实留空，不编造
+数字)；电荷方案用的是gasteiger(RDKit内置，免量子化学)，不是生产级AM1-BCC。
+按`run_protein_equilibration_md()`实测的CPU吞吐量推算，15ns×3副本这个量级
+需要数十小时到几天，这是`run_md_stability_stub()`继续保留"需要GPU"占位的
+真实依据，不是没去试。
 
 Pass criteria（`config/pipeline.yaml` `funnel.L3.pass_criteria`）：
 - 配体RMSD(最后15ns均值) < 2.5 Å

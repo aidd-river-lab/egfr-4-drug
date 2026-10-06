@@ -5,6 +5,10 @@ __pycache__/
 .pytest_cache/
 *.db
 
+# AiZynthFinder真实预训练模型+ZINC建块库，约1.2GB，不随代码库提交，
+# 用 .venv310/bin/download_public_data validation/aizynth_data 重新下载
+validation/aizynth_data/
+
 # 数据库凭证——真实密码/host绝不能进git历史
 .env
 .env.*

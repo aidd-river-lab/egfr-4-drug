@@ -122,17 +122,28 @@ doc/01-09这9篇文档描述的是**共享引擎**，不是某条路线专属的
 见 [`requirements.txt`](../requirements.txt)。核心依赖（RDKit/pandas/numpy/
 pydantic/scipy/PyYAML/pytest）在本仓库 `.venv`（Python 3.9.6）下已验证可用。
 
-**2026-10更新：`meeko`/`vina`/`PyRosetta`/`openmm`/`pdbfixer`都已经在第二个
-环境`.venv310`(Python 3.10)里真实装好并跑通过**(见`scripts/setup_docking_env.sh`，
-`openmm`/`pdbfixer`是纯pip装，不需要像vina/pyrosetta那样处理Boost/PATH的坑)——
-不是"未安装"，是"主.venv装不了，需要另起一个环境"，已经用这套环境对真实下载的
-PDB结构(5EHR/6LUD/6SCM/4TZ4/DUD-E的EGFR受体)跑出了真实对接分数、真实突变建模、
-真实蛋白短程MD平衡(见[02](02-structure-ensemble.md))、真实retrospective验证
-(见[14](14-retrospective-validation-results.md))。仍然没有的是`openfe`(FEP)/
-`aizynthfinder`(逆合成)/完整PRosettaC(真正的三元复合物预测流程)——`openfe`
-需要GPU才有实际意义(CPU上一次FEP微扰要几天到几周)；`aizynthfinder`
-(pip可装，但需要额外下载公开训练模型，这步本次没做)；完整PRosettaC需要额外的
-重型软件依赖(PatchDock/完整Rosetta C++套件)，原因和升级路径见对应模块docstring。
+**2026-10更新：`meeko`/`vina`/`PyRosetta`/`openmm`/`pdbfixer`/`aizynthfinder`
+都已经在第二个环境`.venv310`(Python 3.10)里真实装好并跑通过**(见
+`scripts/setup_docking_env.sh`，这几个都是纯pip装，不需要像vina/pyrosetta
+那样处理Boost/PATH的坑)——不是"未安装"，是"主.venv装不了，需要另起一个
+环境"，已经用这套环境对真实下载的PDB结构(5EHR/6LUD/6SCM/4TZ4/DUD-E的EGFR
+受体)跑出了真实对接分数、真实突变建模、真实蛋白短程MD平衡(见
+[02](02-structure-ensemble.md))、真实retrospective验证
+(见[14](14-retrospective-validation-results.md))、真实逆合成路线搜索
+(见[07](07-synthesis.md)，真实跑出奥希替尼的4步合成路线，4个起始原料全部
+在ZINC真实库存里)。
+
+**配体结合复合物的真实短程MD另外装了一个conda环境**(`openff-toolkit`需要
+Python≥3.11或conda解决一套复杂依赖，pip在`.venv310`里装不了)：
+`mamba install -c conda-forge ambertools openff-toolkit openmm
+openmmforcefields pdbfixer`(强烈建议用mamba不要用conda classic，后者解这组
+依赖可能卡在"Solving environment"几十分钟)，详见`scripts/setup_docking_env.sh`
+第8步。真实跑过一次：奥希替尼(真实6LUD晶体坐标) + C797S三重突变受体，10ps
+真实轨迹，配体RMSD没有发散(见[04](04-funnel-docking.md))。
+
+仍然没有的是`openfe`(FEP，需要GPU才有实际意义，CPU上一次FEP微扰要几天到
+几周)/完整PRosettaC(真正的三元复合物预测流程，需要PatchDock/完整Rosetta
+C++套件这类额外的重型软件依赖)，原因和升级路径见对应模块docstring。
 
 ## 快速开始
 

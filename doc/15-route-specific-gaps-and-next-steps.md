@@ -227,6 +227,34 @@ box中心从真实配体坐标量出来的)。
 原始数据：`validation/chembl_shp2/results/docking_scores.csv`；脚本：
 `scripts/run_chembl_shp2_validation.py`。
 
+## 2026-10再补充：三个之前标"需要第三方工具"的占位，真实装好并验证过了
+
+这几个不是某条路线专属的，是共享引擎层面的真实升级，三条路线都能用：
+
+1. **OpenMM+PDBFixer(蛋白短程MD)**：纯pip装进`.venv310`。真实跑过6LUD受体
+   (4981原子)的能量最小化+10ps轨迹，CA骨架RMSD稳定在1.5-1.9Å，没有发散。
+   `core/structures.py::run_protein_equilibration_md()`。顺带测出真实CPU
+   吞吐量：10ps约86秒，换算下来真实项目需要的20ns×3副本量级要数十小时到
+   几天——这是"需要GPU"这句话第一次有具体数字支撑，不是空口说。
+2. **AmberTools+openff-toolkit(配体结合复合物MD)**：需要单独的conda环境
+   (openff-toolkit需要Python≥3.11，pip在.venv310装不了)，用mamba(不是
+   classic conda，后者卡在"Solving environment"20多分钟没解出来)几分钟内
+   装好。真实跑过奥希替尼(**真实6LUD晶体坐标**，不是对接预测姿态)+C797S
+   三重突变受体的复合物MD，配体RMSD均值1.54Å，没有飘出口袋——`core/
+   md_stability.py::run_protein_ligand_complex_md()`。这证明工具链通了，
+   不代表L3已经"真实可用"：还是皮秒级demo，`hinge_hbond_occupancy_pct`等
+   字段还没实现，诚实留空。
+3. **AiZynthFinder(真实逆合成)**：纯pip装，额外下载约1.2GB真实模型+1700万
+   ZINC建块库(路上第一次下载时ZINC库存文件被截断，重新下载才发现并修复，
+   现在数据完整性已验证过)。真实跑出奥希替尼的4步合成路线，4个起始原料
+   全部在真实库存里，其中`C=CC(=O)Cl`(丙烯酰氯)正是真实合成化学里安装
+   丙烯酰胺弹头的标准试剂，和真实化学直觉吻合——`core/synthesis.py::
+   run_retrosynthesis()`。详见[07](07-synthesis.md)。
+
+这三个升级没有改变任何路线的"缺口"结论(路线B决策批次仍然缺、SHP2验证仍然
+偏弱)，但把"这几个环节需要第三方工具"从占位声明变成了真实验证过的能力，
+以后真要往这几个方向投入时，不需要再从零开始装环境。
+
 ## 接下来具体怎么做：按性价比排序，不是按路线编号排序
 
 1. **路线C的共价几何判据——已完成**，结果见上文"2026-10补充"部分：
