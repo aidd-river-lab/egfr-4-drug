@@ -171,16 +171,12 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start["现在"] --> Done1["✅已完成: 路线C共价几何验证(真实PDB 4ZAU)\n✅已完成: DUD-E EGFR验证(AUC=0.69)\n✅已完成: ChEMBL SHP2验证(AUC=0.575，偏弱)\n✅已完成: 路线B的10个候选真实对接(warhead片段-8.19 kcal/mol)"]
+    Start["现在"] --> Done1["✅已完成: 路线C共价几何验证(真实PDB 4ZAU)\n✅已完成: DUD-E EGFR验证(AUC=0.69)\n✅已完成: ChEMBL SHP2验证(AUC=0.575，偏弱)\n✅已完成: 路线B的10个候选真实对接(warhead片段-8.19 kcal/mol)\n✅已完成: SHP2偏弱原因排查(排除了口袋不对/分子量混淆，更像是题更难)"]
     Done1 --> Fork{"路线B三元复合物\n要不要继续投入?"}
     Fork -->|选A: 免费多跑几千次| TryA["大概率还是0命中\n(几何上天然不利，不是运气)\n但免费，值得先试"]
     Fork -->|选B: 写新的定向采样代码| TryB["几小时工程量\n不保证成功\n性价比不确定"]
     Fork -->|选C: 先放一放| TryC["接受当前轻量版走不通的结论\n正式标记为需要PatchDock等重型工具"]
-    Fork -.推荐.-> TryC
-
-    Fork2{"路线A的SHP2验证结果偏弱\n要不要查清楚原因?"}
-    Fork2 -->|查| CheckBind["逐个化合物核对文献绑定位点\n(活性位点vs变构位点)\n工作量不小"]
-    Fork2 -.推荐先问.-> CheckBind
+    Fork -.推荐，目前唯一还悬着的分叉.-> TryC
 
     External["需要你去找外部资源才能推进的"] --> E1["找药物化学专家\nreview骨架设计"]
     External --> E2["花钱找专利代理人\n做真实FTO检索"]

@@ -5,7 +5,7 @@ validation/dude_egfr/results/ 和 doc/12-retrospective-validation.md。
 """
 import random
 
-from core.validation import compute_enrichment_factor, compute_roc_auc
+from core.validation import compute_auc_by_similarity_to_reference, compute_enrichment_factor, compute_roc_auc
 
 
 def test_auc_perfect_separation_is_one():
@@ -84,4 +84,42 @@ def test_enrichment_factor_honestly_fails_without_actives():
 
 def test_enrichment_factor_rejects_invalid_fraction():
     result = compute_enrichment_factor([True, False], [-9.0, -8.0], top_fraction=1.5)
+    assert result["ok"] is False
+
+
+# ------------------------------------------------------------
+# compute_auc_by_similarity_to_reference：路线A的SHP2验证做完之后新增的诊断工具
+# ------------------------------------------------------------
+def test_similarity_grouping_detects_real_confound():
+    """构造一个真实存在"混了两类机制"的场景：像苯酚的那组里分数和活性完全
+    对应(真实tunnel位点逻辑)，不像苯酚的那组分数和活性完全反过来(另一种
+    机制，用错了口袋)——分组后应该能看出高相似度组AUC远高于低相似度组，
+    整体混在一起的AUC会被拉成很差，掩盖了真实的信号。"""
+    reference = "c1ccccc1O"
+    smiles = [
+        "c1ccccc1O", "Cc1ccccc1O", "c1ccccc1OC", "Clc1ccccc1O",  # 像苯酚
+        "CCCCCCCC", "CCN(CC)CC", "c1ccncc1", "C1CCNCC1",  # 不像苯酚
+    ]
+    labels = [True, True, False, False, True, True, False, False]
+    scores = [-9.0, -8.5, -5.0, -5.2, -5.0, -5.1, -9.0, -8.9]
+    result = compute_auc_by_similarity_to_reference(labels, scores, smiles, reference, thresholds=[0.3])
+    assert result["ok"] is True
+    group = result["by_threshold"][0.3]
+    assert group["high_similarity_auc"]["auc"] == 1.0
+    assert group["low_similarity_auc"]["auc"] == 0.0
+    # 整体(不分组)的AUC应该明显比任何一组单独看都差——这正是分组前看不出真实模式的原因
+    assert result["overall_auc"]["auc"] < 0.5
+
+
+def test_similarity_grouping_honestly_fails_on_bad_reference():
+    result = compute_auc_by_similarity_to_reference(
+        [True, False], [-9.0, -8.0], ["c1ccccc1", "CCCC"], reference_smiles="not_a_valid_smiles!!!"
+    )
+    assert result["ok"] is False
+
+
+def test_similarity_grouping_rejects_length_mismatch():
+    result = compute_auc_by_similarity_to_reference(
+        [True, False, True], [-9.0, -8.0], ["c1ccccc1", "CCCC"], reference_smiles="c1ccccc1O"
+    )
     assert result["ok"] is False

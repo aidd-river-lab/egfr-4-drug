@@ -12,6 +12,17 @@ Retrospective验证：用已知答案(真实活性化合物 vs 诱饵/无活性�
 
 真实数据来源：scripts/run_dude_validation.py跑DUD-E的EGFR数据集产出的
 validation/dude_egfr/results/docking_scores.csv，用这两个函数算出最终报告。
+
+第三个函数`compute_auc_by_similarity_to_reference()`是路线A的SHP2验证
+(AUC=0.575，明显比EGFR那次弱)跑完之后新增的诊断工具：AUC偏弱时，一个
+常见的疑点是"真实数据库里混进了结合在不同位点/不同机制的化合物"(比如
+SHP2既有变构tunnel位点抑制剂，也有活性位点抑制剂，强行用同一个受体对接
+会制造虚假的低区分度)。这个函数用2D化学结构相似度(Morgan指纹+Tanimoto)
+把化合物按"像不像某个已知结合在目标位点的原型分子"分组，分别算AUC——
+如果分组后"更像"那组AUC明显更高，说明确实是"混进了别的机制"；如果没有
+这个模式(本仓库SHP2那次就是没有)，说明问题更可能是任务本身难，不是
+口袋选错了。这是一个比"逐个化合物查文献确认结合位点"便宜得多的初筛，
+不能100%取代人工核对，但能先排除/支持这个假设。
 """
 from __future__ import annotations
 
@@ -138,6 +149,75 @@ def compute_enrichment_factor(
     return {"ok": True, **result.__dict__}
 
 
+def compute_auc_by_similarity_to_reference(
+    labels: list[bool],
+    scores: list[float],
+    smiles_list: list[str],
+    reference_smiles: str,
+    thresholds: list[float] = (0.15, 0.2, 0.25, 0.3),
+    lower_score_is_more_positive: bool = True,
+) -> dict:
+    """
+    按"和某个已知参照分子的2D结构相似度"分组，分别算AUC——诊断"AUC整体偏弱，
+    是不是因为数据库里混进了结合在别的位点/别的机制的化合物"这个假设。
+
+    reference_smiles：已知确实结合在目标位点的原型分子(比如SHP2的SHP099，
+    一定要是查证过真实存在、真实结构的分子，不能是凭记忆编的)。
+    thresholds：多个Tanimoto相似度阈值，每个阈值把compounds分成"更像参照分子"
+    和"更不像"两组，各自算一次AUC，方便看这个分组是不是真的有区分意义
+    (如果每个阈值下两组AUC都差不多，说明相似度分组这个假设没有被数据支持)。
+
+    依赖RDKit(这个仓库其他函数不需要，这里需要算分子指纹)，lazy import。
+    """
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import AllChem, DataStructs
+    except ImportError as exc:
+        return {"ok": False, "reason": f"需要RDKit算分子相似度: {exc}"}
+
+    ref_mol = Chem.MolFromSmiles(reference_smiles)
+    if ref_mol is None:
+        return {"ok": False, "reason": f"参照分子SMILES解析失败: {reference_smiles}"}
+    ref_fp = AllChem.GetMorganFingerprintAsBitVect(ref_mol, radius=2, nBits=2048)
+
+    if not (len(labels) == len(scores) == len(smiles_list)):
+        return {"ok": False, "reason": "labels/scores/smiles_list长度必须一致"}
+
+    similarities = []
+    for smi in smiles_list:
+        mol = Chem.MolFromSmiles(smi)
+        if mol is None:
+            similarities.append(None)
+            continue
+        fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=2048)
+        similarities.append(DataStructs.TanimotoSimilarity(ref_fp, fp))
+
+    valid = [(lbl, sc, sim) for lbl, sc, sim in zip(labels, scores, similarities) if sim is not None]
+    if not valid:
+        return {"ok": False, "reason": "没有能成功算出相似度的化合物"}
+
+    overall_auc = compute_roc_auc(
+        [v[0] for v in valid], [v[1] for v in valid], lower_score_is_more_positive
+    )
+
+    by_threshold = {}
+    for threshold in thresholds:
+        high = [(lbl, sc) for lbl, sc, sim in valid if sim >= threshold]
+        low = [(lbl, sc) for lbl, sc, sim in valid if sim < threshold]
+        by_threshold[threshold] = {
+            "high_similarity_n": len(high),
+            "high_similarity_auc": compute_roc_auc(
+                [h[0] for h in high], [h[1] for h in high], lower_score_is_more_positive
+            ),
+            "low_similarity_n": len(low),
+            "low_similarity_auc": compute_roc_auc(
+                [l[0] for l in low], [l[1] for l in low], lower_score_is_more_positive
+            ),
+        }
+
+    return {"ok": True, "overall_auc": overall_auc, "by_threshold": by_threshold}
+
+
 if __name__ == "__main__":
     print("=== 完美排序(活性分子分数全部比诱饵低)：AUC应该是1.0 ===")
     labels = [True, True, True, False, False, False]
@@ -159,3 +239,10 @@ if __name__ == "__main__":
 
     print("\n=== 富集因子：前50%刚好全是活性分子 ===")
     print(compute_enrichment_factor(labels, scores, top_fraction=0.5))
+
+    print("\n=== 按相似度分组诊断(真实SHP099 vs 几个虚构的苯环分子做demo) ===")
+    shp099 = "CC1(N)CCN(c2cnc(-c3cccc(Cl)c3Cl)c(N)n2)CC1"
+    demo_smiles = ["CC1(N)CCN(c2cnc(-c3cccc(Cl)c3Cl)c(N)n2)CC1", "c1ccccc1", "c1ccccc1O", "c1ccccc1N"]
+    demo_labels = [True, False, False, True]
+    demo_scores = [-9.5, -5.0, -5.2, -8.8]
+    print(compute_auc_by_similarity_to_reference(demo_labels, demo_scores, demo_smiles, shp099, thresholds=[0.5]))
