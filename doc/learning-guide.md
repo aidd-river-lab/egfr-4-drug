@@ -292,7 +292,17 @@ SHP2的抑制剂是**变构抑制剂**(见第3.1节)，结合在一个由三个�
   和平庸降解剂的分水岭，但目前的计算方法还很难精确预测，这正是
   `core/ternary_complex.py`里诚实标注为"未实现"的部分。
 
-### 路线C：共价化学——弹头反应性和攻击角几何
+### 路线C：共价化学——弹头反应性和攻击角几何(注意：真实候选分子用的是另一种机制)
+
+**先纠正一个容易误会的地方**：路线C真实生成的324个候选分子(demo
+aminopyrimidine_biphenyl骨架)配置的是`reversible_orthosteric`(可逆正构，
+不是共价)，真实precedent是tigozertinib(BLU-945，明确reversible/
+non-covalent)。共价(`covalent_new_site`)只是配置里的backup选项，没有
+真正落地到任何候选分子上——下面讲的共价化学知识，是为了讲清楚
+`core/covalent.py`这个模块本身在算什么，不代表路线C的324个候选分子真的
+用得上它。真正含共价弹头、能验证这套判据的，是奥希替尼这个外部参照分子
+(见[doc/15](15-route-specific-gaps-and-next-steps.md)里用真实PDB 4ZAU
+跑出来的结果)。
 
 共价抑制剂的弹头(通常是丙烯酰胺一类"迈克尔受体")要通过一种叫**迈克尔加成
 反应**的化学反应，和半胱氨酸的硫原子形成共价键。这个反应对**攻击角度**
@@ -326,8 +336,11 @@ SHP2的抑制剂是**变构抑制剂**(见第3.1节)，结合在一个由三个�
 
 ---
 
-看完这篇之后建议的阅读顺序：[doc/00-design-overview.md](00-design-overview.md)
-(总览) → [10-pipeline-walkthrough.md](10-pipeline-walkthrough.md)(流程/算法
+看完这篇之后建议先看[16-visual-dashboard.md](16-visual-dashboard.md)——
+一张图看懂全局(问题背景/三路线战略/管线流程/真实进度/工业级差距/下一步)，
+全部配图，不需要先读完其他文档。之后再按兴趣深入：
+[doc/00-design-overview.md](00-design-overview.md)
+(总览/导航) → [10-pipeline-walkthrough.md](10-pipeline-walkthrough.md)(流程/算法
 深入讲解，代码怎么跑、黑盒打分函数背后是什么数学) → 如果读完还是觉得抓不住，
 看[12-worked-example-walkthrough.md](12-worked-example-walkthrough.md)(全程
 跟两个真实分子走一遍，每一步都是真实数字，没有抽象占位符) →

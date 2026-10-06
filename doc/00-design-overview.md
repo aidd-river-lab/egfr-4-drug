@@ -1,23 +1,25 @@
 # 设计总览
 
-本文档是整个仓库文档集的入口。**如果你没有制药/生物背景，建议先读
-[learning-guide.md](learning-guide.md)**——里面用编程类比把EGFR、突变、
-激酶、共价药、降解剂、ADMET、对接/FEP这些术语讲清楚，再回来看下面的内容
-会顺畅很多。
+本文档是整个仓库文档集的入口。**推荐的阅读起点，按顺序：**
 
-看完术语速成后，再推荐四篇：[10-pipeline-walkthrough.md](10-pipeline-walkthrough.md)
-是代码实际执行流程的详细走读(每一步调用了什么、黑盒打分函数背后算的是什么
-数学/物理)；如果读完那篇还是觉得抓不住，换一种更慢、更具体的讲法——
-[12-worked-example-walkthrough.md](12-worked-example-walkthrough.md)全程只
-跟两个真实分子(仓库自己生造出来排第一的RTC-0000 + 真实上市药奥希替尼)走一遍
-全流程，每一步都是真实数字，不用占位符；[13-design-strategy-and-data.md](13-design-strategy-and-data.md)
-讲"网上抓的数据到底分几类、分子怎么从骨架+片段拼出来、为什么是这三条路线"
-这条完整的设计思考过程；[11-industrial-gap-and-roadmap.md](11-industrial-gap-and-roadmap.md)
-讲这个仓库和工业界真实计算药物研发管线的差距、以及接下来具体该怎么做
-(其中第5节建议的retrospective验证已经真实跑完，结果见
-[14-retrospective-validation-results.md](14-retrospective-validation-results.md)；
-三条路线各自单独的缺口和优先级排序见
-[15-route-specific-gaps-and-next-steps.md](15-route-specific-gaps-and-next-steps.md))。
+1. **[learning-guide.md](learning-guide.md)**——零生化背景的术语速成，
+   用编程类比把EGFR、突变、共价药、降解剂、ADMET、对接/FEP这些术语讲清楚。
+2. **[16-visual-dashboard.md](16-visual-dashboard.md)**——**一张图看懂
+   全局**：问题背景、三路线战略、管线流程、三路线真实进度、已验证的结果、
+   和工业级的差距、接下来怎么走，全部配图，不需要先读完其他文档。
+3. 以上两篇看完之后，按兴趣挑：
+   - 想知道代码具体怎么跑、黑盒打分函数背后是什么数学——
+     [10-pipeline-walkthrough.md](10-pipeline-walkthrough.md)
+   - 想跟着两个真实分子(RTC-0000+奥希替尼)把全流程走一遍、每一步都是
+     真实数字——[12-worked-example-walkthrough.md](12-worked-example-walkthrough.md)
+   - 想知道数据从哪来、分子怎么从骨架+片段拼出来、三路线战略的完整推导——
+     [13-design-strategy-and-data.md](13-design-strategy-and-data.md)
+   - 想看工业级差距的完整分维度表格、retrospective验证的详细结果、
+     三路线各自的缺口排序——[11](11-industrial-gap-and-roadmap.md)/
+     [14](14-retrospective-validation-results.md)/
+     [15](15-route-specific-gaps-and-next-steps.md)
+   - 想看某条路线的生物学背景——`doc/routes/*.md`
+   - 想看某个环节的详细字段/阈值设计——`doc/01`~`doc/09`
 
 ## 2026-10 更新：从单一路线扩展成三条并行路线
 
@@ -116,8 +118,15 @@ doc/01-09这9篇文档描述的是**共享引擎**，不是某条路线专属的
 
 见 [`requirements.txt`](../requirements.txt)。核心依赖（RDKit/pandas/numpy/
 pydantic/scipy/PyYAML/pytest）在本仓库 `.venv`（Python 3.9.6）下已验证可用。
-`meeko`/`vina`（对接需要）和 `openmm`/`openfe`/`aizynthfinder`/`PRosettaC`
-（MD/FEP/逆合成/三元复合物预测需要）未安装，原因和升级路径见该文件注释。
+
+**2026-10更新：`meeko`/`vina`/`PyRosetta`已经在第二个环境`.venv310`(Python
+3.10)里真实装好并跑通过**(见`scripts/setup_docking_env.sh`)——不是"未安装"，
+是"主.venv装不了，需要另起一个环境"，已经用这套环境对真实下载的PDB结构
+(5EHR/6LUD/6SCM/4TZ4/DUD-E的EGFR受体)跑出了真实对接分数、真实突变建模、
+真实retrospective验证(见[14](14-retrospective-validation-results.md))。
+仍然没有的是`openmm`(MD)/`openfe`(FEP)/`aizynthfinder`(逆合成)/完整
+PRosettaC(真正的三元复合物预测流程)，这几个需要GPU集群或额外的重型软件
+依赖(PatchDock/完整Rosetta C++套件)，原因和升级路径见对应模块docstring。
 
 ## 快速开始
 
@@ -125,7 +134,7 @@ pydantic/scipy/PyYAML/pytest）在本仓库 `.venv`（Python 3.9.6）下已验�
 # 建库(推荐MySQL；三条路线共用一个库，靠compounds.route_id列区分)
 mysql -u root -p < db/schema_mysql.sql
 
-# 跑测试(75个单测，覆盖所有真实可跑的模块，三条路线的配置都有独立校验)
+# 跑测试(112个单测，覆盖所有真实可跑的模块，三条路线的配置都有独立校验)
 .venv/bin/python -m pytest tests/ -v
 
 # 路线C端到端工作流(默认route_id)

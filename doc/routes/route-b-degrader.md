@@ -32,7 +32,10 @@ beyond Rule-of-5，这个目标本身已经是本路线最难达成的指标。
 二元对接(warhead结合EGFR、E3配体结合CRBN)只是必要条件，不是充分条件——
 真正决定降解效率的是**三元复合物**(warhead-EGFR-CRBN)能不能形成，以及
 形成时两边的结合界面是互相促进(正协同)还是互相干扰(负协同)。这是二元
-对接完全捕捉不到的，需要PRosettaC/Rosetta这类专门工具，本环境未安装。
+对接完全捕捉不到的，需要PRosettaC/Rosetta这类专门工具——完整PRosettaC
+(PatchDock+完整Rosetta C++套件)本环境确实没装，但PyRosetta本身装了，
+后面"2026-10补充"这几节会讲用PyRosetta自己搭的简化版做过真实尝试、
+以及真实跑出来的诚实负向结果，不是完全没碰这个问题。
 
 `core/ternary_complex.py`延续"真实数学+诚实占位"的模式：
 - `run_ternary_complex_stub()`：诚实返回`ok=False`，不编造cooperativity数值。
