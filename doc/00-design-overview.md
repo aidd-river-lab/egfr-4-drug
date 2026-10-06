@@ -122,14 +122,17 @@ doc/01-09这9篇文档描述的是**共享引擎**，不是某条路线专属的
 见 [`requirements.txt`](../requirements.txt)。核心依赖（RDKit/pandas/numpy/
 pydantic/scipy/PyYAML/pytest）在本仓库 `.venv`（Python 3.9.6）下已验证可用。
 
-**2026-10更新：`meeko`/`vina`/`PyRosetta`已经在第二个环境`.venv310`(Python
-3.10)里真实装好并跑通过**(见`scripts/setup_docking_env.sh`)——不是"未安装"，
-是"主.venv装不了，需要另起一个环境"，已经用这套环境对真实下载的PDB结构
-(5EHR/6LUD/6SCM/4TZ4/DUD-E的EGFR受体)跑出了真实对接分数、真实突变建模、
-真实retrospective验证(见[14](14-retrospective-validation-results.md))。
-仍然没有的是`openmm`(MD)/`openfe`(FEP)/`aizynthfinder`(逆合成)/完整
-PRosettaC(真正的三元复合物预测流程)，这几个需要GPU集群或额外的重型软件
-依赖(PatchDock/完整Rosetta C++套件)，原因和升级路径见对应模块docstring。
+**2026-10更新：`meeko`/`vina`/`PyRosetta`/`openmm`/`pdbfixer`都已经在第二个
+环境`.venv310`(Python 3.10)里真实装好并跑通过**(见`scripts/setup_docking_env.sh`，
+`openmm`/`pdbfixer`是纯pip装，不需要像vina/pyrosetta那样处理Boost/PATH的坑)——
+不是"未安装"，是"主.venv装不了，需要另起一个环境"，已经用这套环境对真实下载的
+PDB结构(5EHR/6LUD/6SCM/4TZ4/DUD-E的EGFR受体)跑出了真实对接分数、真实突变建模、
+真实蛋白短程MD平衡(见[02](02-structure-ensemble.md))、真实retrospective验证
+(见[14](14-retrospective-validation-results.md))。仍然没有的是`openfe`(FEP)/
+`aizynthfinder`(逆合成)/完整PRosettaC(真正的三元复合物预测流程)——`openfe`
+需要GPU才有实际意义(CPU上一次FEP微扰要几天到几周)；`aizynthfinder`
+(pip可装，但需要额外下载公开训练模型，这步本次没做)；完整PRosettaC需要额外的
+重型软件依赖(PatchDock/完整Rosetta C++套件)，原因和升级路径见对应模块docstring。
 
 ## 快速开始
 

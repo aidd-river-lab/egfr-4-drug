@@ -1,6 +1,6 @@
 # 环节2：结构系综准备
 
-代码：[`core/structures.py`](../core/structures.py) · **状态：下载/清洗部分真实可跑，MD/突变建模部分诚实占位**
+代码：[`core/structures.py`](../core/structures.py) · **状态：下载/清洗/突变建模真实可跑；蛋白短程MD平衡2026-10起真实可跑(CPU，小规模)；真实项目需要的20ns×3副本量级MD/构象聚类仍需GPU，诚实占位**
 
 ## 为什么需要"系综"而不是单一晶体结构
 
@@ -49,9 +49,40 @@ mutate_residue("6lud_receptor_only.pdb", chain="A", resnum=790, new_aa_one_lette
 #  "total_score_after_repacking": -202.5, "out_path": "..."}
 ```
 
-MD平衡/构象聚类这两步仍然是诚实占位，需要 OpenMM/GROMACS+GPU（多副本MD平衡，
-典型配置是20ns×3副本，见 `config/pipeline.yaml` 的
-`funnel.L3.md_length_ns`/`md_replicas`）以及真实轨迹文件（RMSD聚类）：
+## 2026-10再更新：OpenMM真实装好了，蛋白短程MD平衡不再是占位(但完整量级仍需GPU)
+
+`openmm`+`pdbfixer`都是纯pip可装的包(不像vina/pyrosetta需要处理Boost/PATH的坑，
+`.venv310/bin/pip install openmm pdbfixer`直接能装)。`run_protein_equilibration_md()`
+是真实函数：PDBFixer补全缺失原子/加氢 → Amber14力场(ff14SB) + GBn2隐式溶剂
+→ 真实能量最小化 → 真实LangevinMiddle积分器跑MD → 记录CA骨架RMSD轨迹。
+
+真实跑过一次(6LUD受体，4981原子，CPU平台)：
+
+```python
+from core.structures import run_protein_equilibration_md
+
+run_protein_equilibration_md(
+    "6lud_receptor_only.pdb", "6lud_protein_equilibration.dcd", n_steps=5000,
+)
+# {"ok": True, "n_atoms": 4981,
+#  "energy_before_minimization_kj_mol": 529255.9, "energy_after_minimization_kj_mol": -39738.2,
+#  "ca_rmsd_trace_angstrom": [1.15, 1.35, 1.47, 1.59, 1.69, 1.81, 1.88, 1.85, 1.8, 1.93],
+#  "final_ca_rmsd_angstrom": 1.93, ...}
+```
+
+能量从52.9万降到-3.97万kJ/mol(合理的大幅下降，确认最小化真的消除了加氢/补原子
+带来的立体冲突)，CA骨架RMSD在10ps内从0到1.9Å左右爬升后趋于平稳(没有持续发散)，
+说明这个计算出来的结构在物理上是稳定的，没有明显的结构错误。
+
+**这证明了工具链本身是通的，但没有解决"为什么之前说需要GPU"这个问题**——
+真实测出来的吞吐量：5000步(10ps)用了约86秒，换算下来一个真实项目需要的
+20ns×3副本，按这个速度推算大约需要3副本×48小时≈144小时(6天)的CPU时间，
+这正是`run_md_equilibration_stub()`"需要GPU"这句话背后真实的数字依据，不是
+泛泛的说辞。这个函数目前只做"蛋白本身要不要GPU才能跑完整流程"这个问题，
+不是真实项目需要的完整系综/聚类——那部分(以及配体结合复合物的MD稳定性筛，
+`core/md_stability.py`的职责)仍然需要更多算力和配体力场参数化(AmberTools/
+openff-toolkit)才能做，诚实保留占位，见`run_md_equilibration_stub()`和
+`cluster_representative_stub()`：
 
 ```python
 run_md_equilibration_stub(structure_path, length_ns=500, n_replicas=3)

@@ -127,11 +127,104 @@ def run_md_equilibration_stub(structure_path: str, length_ns: int, n_replicas: i
     """
     环节2.2第3步：多副本MD平衡的占位接口，真实需要 OpenMM/GROMACS + GPU，耗时数小时到数天
     （见 doc/02-structure-ensemble.md 的算力预算）。本环境没有GPU，不编造轨迹文件。
+
+    2026-10更新：OpenMM本身(CPU/OpenCL平台)已经真实装好并验证能跑(见
+    run_protein_equilibration_md())，但那是"只做蛋白本身的短程平衡"，不是这里
+    说的"多副本、几十纳秒量级"的平衡协议——真实测过CPU吞吐量后，20ns×3副本这个
+    量级在CPU上需要数十小时(见run_protein_equilibration_md()文档里的真实吞吐量
+    数据)，这个stub保留下来是诚实的：不是"做不到"，是"这个量级在CPU上不现实，
+    需要GPU"，和之前的声明一致，只是现在有了真实测出来的数字支撑这句话。
     """
     return {
         "ok": False,
         "reason": f"需要OpenMM/GROMACS + GPU跑{n_replicas}条{length_ns}ns独立轨迹，本环境无GPU，未执行",
         "structure_path": structure_path,
+    }
+
+
+def run_protein_equilibration_md(
+    structure_path: str, out_trajectory_path: str, n_steps: int = 5000, report_interval: int = 500
+) -> dict:
+    """
+    环节2.2第3步的真实、小规模版本：只对蛋白本身(不含配体)做短程能量最小化+MD平衡，
+    用来验证"这个计算突变/清洗后的结构本身物理上合不合理"——不是真实项目需要的
+    "20ns×3副本"那个量级(那个量级需要GPU，见run_md_equilibration_stub())，是用
+    已经真实装好的OpenMM(CPU平台)能够在合理时间内跑完的一个缩小版，验证逻辑和
+    工具链本身是通的。
+
+    真实测过的吞吐量(2026-10，这台机器，CPU平台，EGFR激酶结构域~5000原子体系)：
+    5000步(10ps)实测耗时约86秒，换算下来20ns大约需要47-48小时/副本——这就是为什么
+    run_md_equilibration_stub()说"CPU不现实，需要GPU"不是一句空话，是真实测出来的
+    吞吐量外推。
+
+    流程：PDBFixer补全缺失原子/加氢 → Amber14力场(ff14SB) + GBn2隐式溶剂(不用显式
+    水盒子，省去设置水盒子大小/离子中和这些额外步骤，换取更快但略粗糙的溶剂化近似)
+    → 真实能量最小化 → 真实LangevinMiddle积分器跑n_steps步 → 每report_interval步
+    记录一次CA骨架RMSD(相对最小化后的初始结构)。
+
+    主.venv(Python 3.9)装不了openmm/pdbfixer，lazy import，真实调用需要
+    `.venv310/bin/python`(openmm装法见scripts/setup_docking_env.sh的后续更新，
+    或直接 `.venv310/bin/pip install openmm pdbfixer`，纯pip可装，不需要像
+    PyRosetta/vina那样处理Boost/C++标准的坑)。
+    """
+    try:
+        import numpy as np
+        from openmm import LangevinMiddleIntegrator
+        from openmm.app import DCDReporter, ForceField, HBonds, NoCutoff, Simulation
+        from openmm.unit import kelvin, nanometer, picosecond, picoseconds
+        from pdbfixer import PDBFixer
+    except ImportError as exc:
+        return {
+            "ok": False,
+            "reason": f"需要openmm+pdbfixer做真实MD平衡，当前解释器未安装: {exc}",
+            "structure_path": structure_path,
+        }
+
+    fixer = PDBFixer(filename=str(structure_path))
+    fixer.findMissingResidues()
+    fixer.findMissingAtoms()
+    fixer.addMissingAtoms()
+    fixer.addMissingHydrogens(7.0)
+
+    forcefield = ForceField("amber14-all.xml", "implicit/gbn2.xml")
+    system = forcefield.createSystem(fixer.topology, nonbondedMethod=NoCutoff, constraints=HBonds)
+
+    integrator = LangevinMiddleIntegrator(300 * kelvin, 1 / picosecond, 0.002 * picoseconds)
+    simulation = Simulation(fixer.topology, system, integrator)
+    simulation.context.setPositions(fixer.positions)
+
+    energy_before = simulation.context.getState(getEnergy=True).getPotentialEnergy()
+    simulation.minimizeEnergy(maxIterations=200)
+    energy_after = simulation.context.getState(getEnergy=True).getPotentialEnergy()
+
+    initial_positions = np.array(
+        simulation.context.getState(getPositions=True).getPositions().value_in_unit(nanometer)
+    )
+    ca_indices = [a.index for a in fixer.topology.atoms() if a.name == "CA"]
+
+    simulation.context.setVelocitiesToTemperature(300 * kelvin)
+    simulation.reporters.append(DCDReporter(str(out_trajectory_path), report_interval))
+
+    rmsd_trace = []
+    n_blocks = max(1, n_steps // report_interval)
+    for _ in range(n_blocks):
+        simulation.step(report_interval)
+        pos = np.array(simulation.context.getState(getPositions=True).getPositions().value_in_unit(nanometer))
+        diff = pos[ca_indices] - initial_positions[ca_indices]
+        rmsd_angstrom = float(np.sqrt(np.mean(np.sum(diff**2, axis=1))) * 10)
+        rmsd_trace.append(round(rmsd_angstrom, 2))
+
+    return {
+        "ok": True,
+        "n_atoms": fixer.topology.getNumAtoms(),
+        "n_steps_run": n_blocks * report_interval,
+        "energy_before_minimization_kj_mol": energy_before.value_in_unit(energy_before.unit),
+        "energy_after_minimization_kj_mol": energy_after.value_in_unit(energy_after.unit),
+        "ca_rmsd_trace_angstrom": rmsd_trace,
+        "final_ca_rmsd_angstrom": rmsd_trace[-1],
+        "out_trajectory_path": str(out_trajectory_path),
+        "note": "这是蛋白本身的短程平衡(CPU, GBn2隐式溶剂)，不是配体结合的复合物稳定性"
+        "筛选(那是core/md_stability.py的职责，需要先给配体做力场参数化)",
     }
 
 

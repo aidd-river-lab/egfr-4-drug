@@ -13,3 +13,5 @@ meeko==0.8.0
 vina==1.2.7  # 从源码编译，见 scripts/setup_docking_env.sh
 pyrosetta==2026.39  # 用pyrosetta-installer装，见 scripts/setup_docking_env.sh
 pymysql==1.2.3
+openmm==8.6.1  # 纯pip可装，不需要像vina/pyrosetta那样处理Boost/PATH的坑
+pdbfixer  # 配合openmm补全PDB缺失原子/加氢，core/structures.py::run_protein_equilibration_md()
