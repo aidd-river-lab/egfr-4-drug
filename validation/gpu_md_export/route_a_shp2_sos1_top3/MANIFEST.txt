@@ -1,0 +1,8 @@
+ensemble_id=SHP2_tunnel_5ehr
+receptor_pdb=routes/route_a_shp2_sos1/structures/5ehr_receptor_only.pdb
+
+RTA-0005: 真实Vina打分-10.74 kcal/mol，54个原子，已导出RTA-0005.sdf
+RTA-0010: 真实Vina打分-9.85 kcal/mol，64个原子，已导出RTA-0010.sdf
+RTA-0009: 真实Vina打分-9.5 kcal/mol，61个原子，已导出RTA-0009.sdf
+
+受体文件: 5ehr_receptor_only.pdb(真实routes/route_a_shp2_sos1/structures/5ehr_receptor_only.pdb来源)

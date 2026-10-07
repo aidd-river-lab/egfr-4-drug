@@ -1,0 +1,8 @@
+ensemble_id=L858R_T790M_C797S_6lud
+receptor_pdb=routes/route_c_4th_gen_tki/structures/6lud_receptor_only.pdb
+
+RTC-0303: 真实Vina打分-9.43 kcal/mol，52个原子，已导出RTC-0303.sdf
+RTC-0249: 真实Vina打分-8.98 kcal/mol，51个原子，已导出RTC-0249.sdf
+RTC-0270: 真实Vina打分-8.8 kcal/mol，49个原子，已导出RTC-0270.sdf
+
+受体文件: 6lud_receptor_only.pdb(真实routes/route_c_4th_gen_tki/structures/6lud_receptor_only.pdb来源)

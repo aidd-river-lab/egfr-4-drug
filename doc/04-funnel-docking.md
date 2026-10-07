@@ -126,9 +126,85 @@ ambertools openff-toolkit openmm openmmforcefields pdbfixer`，详细步骤见
 数字)；电荷方案用的是gasteiger(RDKit内置，免量子化学)，不是生产级AM1-BCC。
 按`run_protein_equilibration_md()`实测的CPU吞吐量推算，15ns×3副本这个量级
 需要数十小时到几天，这是`run_md_stability_stub()`继续保留"需要GPU"占位的
-真实依据，不是没去试。真要免费拿到GPU把这个量级跑起来，见
-`notebooks/colab_gpu_md.ipynb`(自包含的Colab notebook，真实复现这整套流程，
-用免费GPU，不需要本仓库其他文件)。
+真实依据，不是没去试。真要免费拿到GPU把这个量级跑起来，见下面。
+
+### 怎么用免费GPU真实跑起来：`notebooks/colab_gpu_md.ipynb`
+
+这个notebook是**自包含的**——不需要上传这个仓库的任何其他文件，所有
+结构数据都会在notebook里重新从RCSB真实下载。打开+跑起来的步骤：
+
+**准备阶段(在Colab界面里操作，不是notebook的cell)**：
+1. 打开 [colab.research.google.com](https://colab.research.google.com)，
+   登录你的Google账号(免费GPU额度跟账号绑定，有每日/每几小时的用量上限，
+   用太多会被临时限流，这是Colab免费层的真实限制，不是bug)。
+2. `文件 → 上传笔记本`，选本仓库的`notebooks/colab_gpu_md.ipynb`。
+3. `修改运行时类型`，确认加速器选的是`T4 GPU`(notebook的metadata里已经
+   预设了这个，正常情况会自动选上，这一步是手动兜底检查)。
+
+**notebook内部8个cell，按顺序点"运行"，不要跳步**：
+
+| 步骤 | 做什么 | 要注意什么 |
+|---|---|---|
+| 1 | 装`condacolab`(给Colab装conda/mamba的社区工具) | 运行完**会自动重启运行时**，看到"会话已崩溃"提示是正常的，不是报错，等几秒重启完成 |
+| 2 | 重启后，`mamba install`装这次会话本地验证过的同一套依赖：`ambertools`(真实antechamber二进制)+`openff-toolkit`+`openmm`+`openmmforcefields`+`pdbfixer`+`rdkit` | 用的是mamba不是conda classic(本地踩过conda解这组依赖卡死的坑)；装完会打印`可用平台`列表，**必须看到`CUDA`在列表里**，否则说明没真的分到GPU，要回去检查准备阶段第3步 |
+| 3 | 真实下载6LUD晶体结构(`urllib`直连RCSB)，清洗出受体链 | 和本地`core/structures.py::clean_chain()`逻辑完全一样，这里是内联重写的一份，不依赖仓库代码 |
+| 4 | 从真实晶体坐标重建奥希替尼，`AssignBondOrdersFromTemplate`转移真实键级 | 和本地做法一致，不是用对接预测的姿态 |
+| 5 | 定义MD函数(和`core/md_stability.py::run_protein_ligand_complex_md()`逻辑一致，加了显式GPU平台选择) | 纯定义，不产出结果，运行很快 |
+| 6 | 先跑一个**标定**：5000步(10ps)，真实测这块GPU的吞吐量 | 这一步拿到的`seconds_per_1000_steps`数字，决定第7步能跑多少 |
+| 7 | 按标定结果，在一个时间预算(默认20分钟)内尽量跑接近真实项目量级的轨迹 | 想跑更长就把`time_budget_minutes`改大，但**Colab免费层会话大概12小时会被强制断开，空闲太久也会断线**，不要设得离谱大 |
+| 8 | 把跑出来的`.dcd`轨迹文件下载回本地 | `.dcd`能用VMD/PyMOL/MDAnalysis打开看真实的分子运动；同时会打印这次真实跑出来的配体RMSD轨迹，照着本节上面的pass criteria(<2.5Å)自己判断这次姿态稳不稳 |
+
+**怎么判断这次跑得对不对**：第6步标定如果平台列表里没有`CUDA`，后面
+全是在用CPU模拟GPU的"假跑"，速度跟本地Mac差不多(86秒/10ps量级)，没有
+意义——一定要先确认标定阶段的吞吐量数字明显快于这个数(真实T4一般能
+快一到两个数量级)才继续。第8步打印的RMSD轨迹，解读方式和本文档上面
+"真实跑过一次"那段描述完全一样：均值<2.5Å且没有持续爬升趋势=姿态稳定，
+持续发散=这个对接姿态很可能是假阳性。
+
+**这个notebook截至目前还没有真实在GPU上跑过**(本仓库没有Colab账号/GPU
+配额去实测)——内容是把本地CPU上已经跑通、验证过数字的同一套代码迁移
+过去，逻辑和参数都是真实的，但"真实GPU上跑出来的速度/结果数字"这部分
+还没有人验证过，如果你跑了，欢迎把标定阶段的真实吞吐量数字和最终RMSD
+轨迹回传，可以直接补进这篇文档。
+
+### 不要只跑demo——第9-11步，换成用这个仓库真实筛选出来的候选分子
+
+第1-8步跑的是奥希替尼+6LUD，只是用来验证GPU工具链本身通不通，**不是
+你应该一直用demo分子跑下去**。真实想推进的是漏斗(环节4)已经筛出来的
+那批真实候选——`routes/<route>/structures/RTx-xxxx_docked.pdbqt`，它们
+的L1 Vina分数已经真实落在数据库`funnel_scores`表里。notebook的第9-11
+个cell(紧接在第8步后面)就是接这一段的：
+
+**第0步，本地先跑(在你电脑终端，不是Colab)**：
+
+```bash
+PYTHONPATH=. .venv310/bin/python scripts/export_top_candidates_for_gpu_md.py \
+    --route route_a_shp2_sos1 --top-n 3
+```
+
+`scripts/export_top_candidates_for_gpu_md.py`做的事：查真实数据库里这条
+路线L1对接分数最好的N个候选(`funnel_scores.score_value`从小到大排序，
+越负越好)，对每个候选的`_docked.pdbqt`(Vina真实算出来的对接姿态)用
+`meeko.PDBQTMolecule`+`RDKitMolCreate`(meeko官方提供的"把对接结果读回
+正确键级分子"工具，不是本脚本自己拼的转换逻辑，这次会话里拿真实的
+`RTC-0000_docked.pdbqt`验证过还原出的SMILES和设计结构完全一致)还原出
+带正确化学键+真实对接坐标的`.sdf`，连同这条路线对应的真实受体PDB
+打包成`validation/gpu_md_export/<route>_top<N>.zip`。`--route`可以换成
+`route_c_4th_gen_tki`(四代TKI路线)；路线B(降解剂)目前只有warhead片段
+的对接分数(见[16第7节](16-visual-dashboard.md)已知限制)，这个脚本暂时
+不支持。
+
+**notebook里的第9-11步**：
+
+| 步骤 | 做什么 |
+|---|---|
+| 9 | 上传刚才本地生成的zip，解压，打印`MANIFEST.txt`里每个候选真实的Vina分数来源 |
+| 10 | 对zip里的每个真实候选，用第5步定义的同一个`run_protein_ligand_complex_md()`函数跑一遍复合物MD(默认每个候选分10分钟GPU时间预算，按第6步标定出的真实吞吐量换算步数)，每个候选跑完当场打印配体RMSD轨迹和"稳定/可能不稳定"的判断 |
+| 11 | 把所有候选的`.dcd`轨迹+汇总JSON打包下载 |
+
+跑完把`my_candidates_md_results.json`贴回来，我可以帮你解读哪些候选
+在这个时间尺度上稳定、要不要把结果更新进`funnel_scores`表的L3记录——
+这一步不是demo了，是真实筛选流程的下一级。
 
 Pass criteria（`config/pipeline.yaml` `funnel.L3.pass_criteria`）：
 - 配体RMSD(最后15ns均值) < 2.5 Å
