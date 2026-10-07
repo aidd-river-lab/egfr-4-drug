@@ -126,7 +126,9 @@ ambertools openff-toolkit openmm openmmforcefields pdbfixer`，详细步骤见
 数字)；电荷方案用的是gasteiger(RDKit内置，免量子化学)，不是生产级AM1-BCC。
 按`run_protein_equilibration_md()`实测的CPU吞吐量推算，15ns×3副本这个量级
 需要数十小时到几天，这是`run_md_stability_stub()`继续保留"需要GPU"占位的
-真实依据，不是没去试。
+真实依据，不是没去试。真要免费拿到GPU把这个量级跑起来，见
+`notebooks/colab_gpu_md.ipynb`(自包含的Colab notebook，真实复现这整套流程，
+用免费GPU，不需要本仓库其他文件)。
 
 Pass criteria（`config/pipeline.yaml` `funnel.L3.pass_criteria`）：
 - 配体RMSD(最后15ns均值) < 2.5 Å
