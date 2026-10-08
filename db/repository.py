@@ -133,6 +133,35 @@ def upsert_md_stability_qc(
         )
 
 
+def upsert_false_positive_attribution(
+    conn,
+    compound_id: str,
+    funnel_score_id: int | None,
+    attribution_label: str,
+    attributed_by: str,
+    notes: str = "",
+) -> None:
+    """
+    环节9.2第2条：给"预测看起来不错、但后续证据显示可能是假阳性"的候选打结构化
+    归因标签——这是`core/feedback.py`里`FalsePositiveAttribution`这7个值之一，
+    schema的CHECK约束会拒绝其它字符串，防止归因变成自由文本。
+
+    这张表设计上是给人工复盘用的(`attributed_by`一般是复盘的人)，这次第一次真实
+    写入时用的是一个自动化的启发式(轨迹趋势判断)，不是人工复盘——`attributed_by`
+    老实标成这个启发式的名字，不冒充人工判断，`notes`里写清楚判断依据，免得将来
+    有人查这条记录时误以为是真人核实过的结论。这张表是纯追加的日志语义(同一个
+    compound_id/funnel_score_id可能被不同时间点的不同归因方式各打一条)，不用
+    ON DUPLICATE KEY UPDATE。
+    """
+    sql = """
+        INSERT INTO false_positive_attributions
+            (compound_id, funnel_score_id, attribution_label, attributed_by, notes)
+        VALUES (%s, %s, %s, %s, %s)
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (compound_id, funnel_score_id, attribution_label, attributed_by, notes))
+
+
 # ------------------------------------------------------------
 # 环节1：compounds / standardize_quarantine
 # ------------------------------------------------------------

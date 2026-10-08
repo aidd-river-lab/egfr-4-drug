@@ -1,0 +1,20 @@
+ensemble_id=SHP2_tunnel_5ehr
+receptor_pdb=routes/route_a_shp2_sos1/structures/5ehr_receptor_only.pdb
+
+跳过(已经真实跑过L3的候选，默认不重复导出): ['RTA-0005', 'RTA-0009', 'RTA-0010']
+
+RTA-0006: 真实Vina打分-9.46 kcal/mol，67个原子，已导出RTA-0006.sdf，R基团={"R1": "4-aminopiperidin-4-yl", "R2": "3-(trifluoromethyl)phenyl"}
+RTA-0011: 真实Vina打分-9.38 kcal/mol，60个原子，已导出RTA-0011.sdf，R基团={"R1": "3-aminopyrrolidin-1-yl", "R2": "2-chloropyridin-3-yl"}
+RTA-0008: 真实Vina打分-9.28 kcal/mol，61个原子，已导出RTA-0008.sdf，R基团={"R1": "3-aminopyrrolidin-1-yl", "R2": "2,3-dichlorophenyl"}
+RTA-0007: 真实Vina打分-9.27 kcal/mol，63个原子，已导出RTA-0007.sdf，R基团={"R1": "4-aminopiperidin-4-yl", "R2": "2-chloropyridin-3-yl"}
+RTA-0012: 真实Vina打分-9.26 kcal/mol，58个原子，已导出RTA-0012.sdf，R基团={"R1": "3-aminoazetidin-1-yl", "R2": "2,3-dichlorophenyl"}
+RTA-0001: 真实Vina打分-8.96 kcal/mol，67个原子，已导出RTA-0001.sdf，R基团={"R1": "4-amino-1-methylpiperidin-4-yl", "R2": "3-chloro-2-fluorophenyl"}
+RTA-0004: 真实Vina打分-8.81 kcal/mol，64个原子，已导出RTA-0004.sdf，R基团={"R1": "4-aminopiperidin-4-yl", "R2": "2,3-dichlorophenyl"}
+RTA-0014: 真实Vina打分-8.6 kcal/mol，61个原子，已导出RTA-0014.sdf，R基团={"R1": "3-aminoazetidin-1-yl", "R2": "3-(trifluoromethyl)phenyl"}
+RTA-0013: 真实Vina打分-8.51 kcal/mol，58个原子，已导出RTA-0013.sdf，R基团={"R1": "3-aminoazetidin-1-yl", "R2": "3-chloro-2-fluorophenyl"}
+RTA-0015: 真实Vina打分-8.28 kcal/mol，57个原子，已导出RTA-0015.sdf，R基团={"R1": "3-aminoazetidin-1-yl", "R2": "2-chloropyridin-3-yl"}
+RTA-0002: 真实Vina打分-8.28 kcal/mol，70个原子，已导出RTA-0002.sdf，R基团={"R1": "4-amino-1-methylpiperidin-4-yl", "R2": "3-(trifluoromethyl)phenyl"}
+RTA-0003: 真实Vina打分-8.04 kcal/mol，66个原子，已导出RTA-0003.sdf，R基团={"R1": "4-amino-1-methylpiperidin-4-yl", "R2": "2-chloropyridin-3-yl"}
+RTA-0000: 真实Vina打分-7.73 kcal/mol，67个原子，已导出RTA-0000.sdf，R基团={"R1": "4-amino-1-methylpiperidin-4-yl", "R2": "2,3-dichlorophenyl"}
+
+受体文件: 5ehr_receptor_only.pdb(真实routes/route_a_shp2_sos1/structures/5ehr_receptor_only.pdb来源)

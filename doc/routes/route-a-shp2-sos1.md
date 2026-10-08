@@ -160,28 +160,51 @@ RTA-0010/-9.85 kcal/mol)，真实在Colab免费T4 GPU上跑完了复合物MD
 notebook已经改成自动探测能用的平台，详见`doc/04`的debug记录)。
 
 **真实结果**(0.474ns/候选，20帧，7865-7875原子，GPU吞吐6.6秒/1000步，
-比本地CPU的17.2秒/1000步快约2.6倍)：
+比本地CPU的17.2秒/1000步快约2.6倍)。轨迹趋势用一个朴素但可复现的量化
+方法判定(前半段10帧均值 vs 后半段10帧均值，差超过0.5Å才算有明显趋势，
+不是凭眼睛看形状)：
 
-| 候选 | 均值RMSD | 轨迹趋势 | L1对接分数 |
-|---|---|---|---|
-| RTA-0005 | 3.33Å | 前段(4.1-4.5Å)明显往下降到后段(2.7-3.3Å)，像是在往一个更稳定的姿态settling | -10.74 kcal/mol(三个里L1最好) |
-| RTA-0009 | 3.61Å | 前段(2.9-3.2Å)持续往上爬到后段(4.4-4.9Å)，是三个里唯一明显drift(漂移)的 | -9.5 kcal/mol |
-| RTA-0010 | 3.27Å | 中段一度降到1.8-2.0Å又跳回4.7Å，大幅震荡、没有稳定趋势 | -9.85 kcal/mol |
+| 候选 | 均值RMSD | 前半段→后半段 | 趋势 | L1对接分数 | R1基团 |
+|---|---|---|---|---|---|
+| RTA-0005 | 3.33Å | 4.0Å → 3.0Å | **settling**(收敛) | -10.74(三个里最好) | 4-aminopiperidin-4-yl |
+| RTA-0009 | 3.61Å | 3.19Å → 4.03Å | **drifting**(漂移) | -9.5 | 3-aminopyrrolidin-1-yl |
+| RTA-0010 | 3.27Å | 2.95Å → 3.6Å | **drifting**(漂移) | -9.85 | 3-aminopyrrolidin-1-yl |
 
 **老实地说，三个均值都没有达到`pipeline.yaml`里L3的真实pass门槛(<2.5Å)**，
 但这次轨迹只有0.474ns，离真实项目要求的15ns窗口差了三个数量级，均值
-本身不能直接套用pass criteria下结论——**更有信息量的是三条轨迹的形状差异
-完全不同**：RTA-0005往下收敛、RTA-0009持续漂移、RTA-0010大幅震荡，这
-三种模式分别对应"正在找到稳定姿态""真实不稳定(对接姿态可能是假阳性)"
-"可能在探索多个相近姿态"三种不同的可能性，需要更长时间尺度才能分清楚，
-不是这次短轨迹能下定论的。另外两项pass criteria(铰链氢键/锚点残基占有率)
-`run_protein_ligand_complex_md()`至今没有实现，这次也没法判定三者里谁
-真正"通过"。
+本身不能直接套用pass criteria下结论——**更有信息量的是趋势**：唯一
+settling(收敛)的RTA-0005，恰好是L1打分最好、且R1基团是
+`4-aminopiperidin-4-yl`的那个；两个drifting(持续漂移，更像真实不稳定，
+L1给的对接姿态可能是假阳性)的都用了`3-aminopyrrolidin-1-yl`这个R1。
+**这是一个假设，不是结论**——样本量只有1 vs 2，远不够格说"这个R1基团
+不行"，但值得在剩下13个候选里重点验证：这条路线demo骨架的R1位点一共
+4个选项(`4-amino-1-methylpiperidin-4-yl`/`4-aminopiperidin-4-yl`/
+`3-aminopyrrolidin-1-yl`/`3-aminoazetidin-1-yl`，各4个R2搭配)，目前
+一个`4-aminopiperidin-4-yl`+两个`3-aminopyrrolidin-1-yl`已经测过，
+另外两种R1(甲基化哌啶/氮杂环丁烷)一个都没测过。
+
+**两个drifting的候选已经记录了结构化假阳性归因**(`false_positive_
+attributions`表，标签`pose_error`，`attributed_by`老实标成
+`automated_rmsd_trend_heuristic_v1`，不冒充人工复盘)——但`core/feedback.py`
+的治理原则要求precision>0.8且≥3个独立化合物才能把假设升级成
+`structural_alerts.yaml`里的硬拒绝规则，现在连"3个独立化合物"都不够，
+**这次只是开始积累数据，不是已经找到了可以拒绝的R基团**。
 
 真实数据已经落库(`funnel_scores`表L3级+`md_stability_qc`表，
-`qc_pass`老实留NULL，没有编造一个基于不完整信息的通过/不通过结论)，
-脚本：`scripts/persist_gpu_md_results.py`；原始轨迹：
+`qc_pass`老实留NULL；`false_positive_attributions`表记了上面两条
+pose_error归因)，脚本：`scripts/persist_gpu_md_results.py`；原始轨迹：
 `notebooks/my_candidates_gpu_md_results/RTA-xxxx_md.dcd`。
+
+### 2026-10再补充：剩下13个候选已经导出，等着在GPU上验证上面那个R1假设
+
+`scripts/export_top_candidates_for_gpu_md.py`现在默认跳过已经真实跑过
+L3的候选，重新跑一次`--route route_a_shp2_sos1 --top-n 16`真实导出了
+剩下13个(`RTA-0006/0011/0008/0007/0012/0001/0004/0014/0013/0015/0002/
+0003/0000`)，打包在`validation/gpu_md_export/route_a_shp2_sos1_top16.zip`，
+已经带上每个候选的真实R1/R2基团组成(写进了MANIFEST.txt)，方便跑完之后
+直接按R1分组对比趋势，不用再回头查数据库。这13个里`4-amino-1-methyl
+piperidin-4-yl`(4个)和`3-aminoazetidin-1-yl`(4个)这两种R1目前一个
+真实MD结果都没有，是验证上面假设最关键的缺口。
 
 ## 尚未做的事
 

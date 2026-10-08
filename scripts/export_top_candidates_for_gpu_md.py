@@ -72,7 +72,9 @@ def _reconstruct_docked_sdf(docked_pdbqt_path: Path, out_sdf_path: Path) -> dict
         return {"ok": False, "reason": str(exc)}
 
 
-def export_top_candidates(route_id: str, top_n: int, ensemble_id: str | None, out_dir: Path) -> dict:
+def export_top_candidates(
+    route_id: str, top_n: int, ensemble_id: str | None, out_dir: Path, skip_done: bool = True
+) -> dict:
     from db.connect import get_connection
 
     ensemble_id = ensemble_id or ROUTE_DEFAULT_ENSEMBLE.get(route_id)
@@ -98,18 +100,37 @@ def export_top_candidates(route_id: str, top_n: int, ensemble_id: str | None, ou
     if not rows:
         return {"ok": False, "reason": f"ensemble {ensemble_id} 下没有真实L1对接记录"}
 
+    done_ids = set()
+    if skip_done:
+        cur.execute(
+            "SELECT DISTINCT compound_id FROM funnel_scores WHERE funnel_level = 'L3' AND ensemble_id = %s",
+            (ensemble_id,),
+        )
+        done_ids = {r[0] for r in cur.fetchall()}
+
     seen = set()
     top_rows = []
+    skipped_done = []
     for compound_id, score_value, raw_output_path in rows:
         if compound_id in seen:
             continue
         seen.add(compound_id)
+        if compound_id in done_ids:
+            skipped_done.append(compound_id)
+            continue
         top_rows.append((compound_id, score_value, raw_output_path))
         if len(top_rows) >= top_n:
             break
 
+    r_groups = {}
+    cur.execute("SELECT compound_id, r_group_assignment FROM designed_molecules")
+    for cid, rg in cur.fetchall():
+        r_groups[cid] = rg
+
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest_lines = [f"ensemble_id={ensemble_id}", f"receptor_pdb={receptor_pdb_rel}", ""]
+    if skipped_done:
+        manifest_lines.append(f"跳过(已经真实跑过L3的候选，默认不重复导出): {sorted(skipped_done)}\n")
     exported = []
     for compound_id, score_value, raw_output_path in top_rows:
         docked_pdbqt = ROOT / raw_output_path
@@ -122,8 +143,10 @@ def export_top_candidates(route_id: str, top_n: int, ensemble_id: str | None, ou
             manifest_lines.append(f"{compound_id}: 还原失败 - {result['reason']}")
             continue
         exported.append(compound_id)
+        rg_note = f"，R基团={r_groups.get(compound_id, '未知')}" if compound_id in r_groups else ""
         manifest_lines.append(
-            f"{compound_id}: 真实Vina打分{score_value} kcal/mol，{result['n_atoms']}个原子，已导出{out_sdf.name}"
+            f"{compound_id}: 真实Vina打分{score_value} kcal/mol，{result['n_atoms']}个原子，"
+            f"已导出{out_sdf.name}{rg_note}"
         )
 
     receptor_src = ROOT / receptor_pdb_rel
@@ -147,10 +170,14 @@ def main() -> None:
     parser.add_argument("--route", required=True, choices=sorted(ROUTE_DEFAULT_ENSEMBLE))
     parser.add_argument("--top-n", type=int, default=3)
     parser.add_argument("--ensemble", default=None, help="不传则用该路线的默认ensemble")
+    parser.add_argument(
+        "--include-done", action="store_true",
+        help="默认跳过已经真实跑过L3的候选(继续推进剩下的)；加这个flag强制重新导出已经跑过的",
+    )
     args = parser.parse_args()
 
     out_dir = ROOT / "validation" / "gpu_md_export" / f"{args.route}_top{args.top_n}"
-    result = export_top_candidates(args.route, args.top_n, args.ensemble, out_dir)
+    result = export_top_candidates(args.route, args.top_n, args.ensemble, out_dir, skip_done=not args.include_done)
 
     if not result["ok"]:
         print(f"[失败] {result['reason']}")
