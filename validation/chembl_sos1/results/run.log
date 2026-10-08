@@ -400,3 +400,33 @@ WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
 WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
 WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
 WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+WARNING: At low exhaustiveness, it may be impossible to utilize all CPUs.
+[数据] 400个真实active + 19个真实inactive(均来自ChEMBL真实测量)
+[受体网格] 计算完成，0.6秒
+[进度] 50/419 (成功50/失败0) 已用8.6分钟，预计剩余63.7分钟
+[进度] 100/419 (成功100/失败0) 已用17.6分钟，预计剩余56.2分钟
+[进度] 150/419 (成功150/失败0) 已用26.6分钟，预计剩余47.7分钟
+[进度] 200/419 (成功200/失败0) 已用36.0分钟，预计剩余39.4分钟
+[进度] 250/419 (成功250/失败0) 已用49.3分钟，预计剩余33.3分钟
+[进度] 300/419 (成功300/失败0) 已用60.7分钟，预计剩余24.1分钟
+[进度] 350/419 (成功350/失败0) 已用241.5分钟，预计剩余47.6分钟
+[进度] 400/419 (成功400/失败0) 已用251.1分钟，预计剩余11.9分钟
+
+[完成] 成功419 / 失败0，结果写入 /Users/river7/work/mkit/code/cancer/egfr-4-drug/validation/chembl_sos1/results/docking_scores.csv

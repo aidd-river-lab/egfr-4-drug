@@ -100,6 +100,39 @@ def upsert_funnel_score(
         )
 
 
+def upsert_md_stability_qc(
+    conn,
+    funnel_score_id: int,
+    rmsd_angstrom: float | None,
+    hinge_hbond_occupancy_pct: float | None = None,
+    target_anchor_occupancy_pct: float | None = None,
+    qc_pass: bool | None = None,
+) -> None:
+    """
+    环节4 L3：MD稳定性的位姿/氢键质检明细，挂在funnel_scores某一行下面。
+    hinge_hbond_occupancy_pct/target_anchor_occupancy_pct目前真实计算逻辑还没
+    实现(需要按残基名追踪氢键距离，见core/md_stability.py顶部声明)，没有就传
+    None老实留空，不编造数字——qc_pass同理，三项标准缺两项时不该强行判定通过/不通过，
+    也传None，让"这条记录还不足以下结论"这件事在数据库里也看得出来。
+    """
+    sql = """
+        INSERT INTO md_stability_qc
+            (funnel_score_id, rmsd_angstrom, hinge_hbond_occupancy_pct,
+             target_anchor_occupancy_pct, qc_pass)
+        VALUES (%s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            rmsd_angstrom = VALUES(rmsd_angstrom),
+            hinge_hbond_occupancy_pct = VALUES(hinge_hbond_occupancy_pct),
+            target_anchor_occupancy_pct = VALUES(target_anchor_occupancy_pct),
+            qc_pass = VALUES(qc_pass)
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            sql,
+            (funnel_score_id, rmsd_angstrom, hinge_hbond_occupancy_pct, target_anchor_occupancy_pct, _bool_or_none(qc_pass)),
+        )
+
+
 # ------------------------------------------------------------
 # 环节1：compounds / standardize_quarantine
 # ------------------------------------------------------------

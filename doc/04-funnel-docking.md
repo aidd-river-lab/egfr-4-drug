@@ -161,11 +161,140 @@ ambertools openff-toolkit openmm openmmforcefields pdbfixer`，详细步骤见
 "真实跑过一次"那段描述完全一样：均值<2.5Å且没有持续爬升趋势=姿态稳定，
 持续发散=这个对接姿态很可能是假阳性。
 
-**这个notebook截至目前还没有真实在GPU上跑过**(本仓库没有Colab账号/GPU
-配额去实测)——内容是把本地CPU上已经跑通、验证过数字的同一套代码迁移
-过去，逻辑和参数都是真实的，但"真实GPU上跑出来的速度/结果数字"这部分
-还没有人验证过，如果你跑了，欢迎把标定阶段的真实吞吐量数字和最终RMSD
-轨迹回传，可以直接补进这篇文档。
+**2026-10更新：这个notebook真实在GPU上跑通了**——用户真实在Colab免费
+T4上跑完了路线A的3个真实候选分子(RTA-0005/0009/0010)的复合物MD，过程中
+踩了一串真实的环境坑(详见下面的debug记录)，最终真实吞吐量是OpenCL平台
+6.6秒/1000步，比本地Mac CPU的17.2秒/1000步快约2.6倍——不是CUDA(这台
+机器的CUDA插件PTX版本不兼容，自动探测逻辑退到了OpenCL，仍是真实GPU
+加速)。真实结果和落库方式见[route-a-shp2-sos1.md](routes/route-a-shp2-sos1.md)。
+
+**真实踩到的一个坑，第5步`from openff.toolkit import Molecule`报
+`RuntimeError: operator torchvision::nms does not exist`**：根源不在
+openff-toolkit本身——本地用同一套组合(`mamba install ambertools
+openff-toolkit openmm openmmforcefields pdbfixer`)验证过，
+`openff.toolkit`完全不需要torch。真实原因是这组依赖在某些Colab环境里
+被mamba的解析器连带装进了一对**版本不匹配**的`pytorch`+`torchvision`，
+报错发生在它们互相校验的那一步，跟我们真正需要的几个包完全无关。
+
+**第一次尝试的修复思路(钉`python=3.11`)已验证是错的，记录下来避免
+再踩**：condacolab会在环境里留一个pin文件强制锁住Python版本(和Colab
+当前kernel进程绑定的版本一致，这是condacolab故意的设计，防止改Python
+版本直接搞坏正在跑的kernel)，真实报错`pin on python =3.13 ... python
+=3.11 is not installable because it conflicts`——这条路走不通。
+
+**第二次尝试(`pip uninstall torch torchvision torchaudio`)也没用，
+原因找到了**：这几个包是mamba装的，不是pip装的，而且conda-forge上
+这个包真实的名字是`pytorch`，不是`torch`——pip从名字上就找不到它，
+会静默跳过(不报错，但什么也没删)。**真实有效的修复**：用`mamba remove`
+配上正确的包名：
+
+```bash
+!mamba remove -y pytorch torchvision torchaudio
+```
+
+删完**必须重启一次Colab会话**(`代码执行程序→重新启动会话`，不用删
+整个运行时，磁盘上已经装好的mamba环境还在)——因为第一次import失败时
+torch的C扩展可能已经把坏状态注册进了这个Python进程的内存里，单纯在
+同一个还活着的kernel里重跑cell不会清掉这个内存状态，必须换一个全新的
+Python进程。重启完，`condacolab.check()`那个cell(第2步)重新跑一遍，
+不需要重新跑`pip install condacolab`(第1步，已经装好了)，然后第3-5步
+按顺序重跑。notebook现在已经把`mamba remove`这一行直接加进第2步的
+安装cell里，以后跑这个notebook不会再需要手动处理这个坑。
+
+**另一个真实踩到的坑，第10步报`NameError: name 'calib' is not
+defined`**：重启运行时之后，第1-8步之前跑出来的所有Python变量都被
+清空了(磁盘上装好的mamba环境还在，但变量不在)。第10步要用到第6步
+标定出来的`calib["seconds_per_1000_steps"]`来换算该给每个真实候选
+分子跑多少步——如果重启之后跳过第6步直接冲到第9/10步(不想再跑一遍
+demo很正常)，这个变量就是空的。**不需要把第7/8步的完整demo流程也
+跑一遍**，只要把第2(确认环境)、3、4、5、6步依次重跑一遍(第6步就是
+那个5000步的小标定，几十秒内跑完)，再回来跑第9步上传、第10步，就
+不会报这个错了。notebook现在也在第10步加了一个明确的检查，报错信息
+会直接告诉你该回去跑哪几步，不会再是一个看不懂的`NameError`。
+
+**第三个真实踩到的坑，第6步报`TypeError: A GAFF force field name must
+be provided as a string`**：`GAFFTemplateGenerator(molecules=[off_mol])`
+不传`forcefield`参数时，"不传该用什么默认值"这件事在不同版本的
+`openmmforcefields`上处理得不一样——本地conda环境装到的版本会自动
+补上`gaff-2.11`，Colab这次装到的版本不会，直接报错。**修复**：显式
+传`forcefield="gaff-2.11"`，不依赖任何版本的默认填充行为，notebook
+第5步的函数定义已经改过来了。
+
+**这同一个`torchvision::nms`报错，真实踩了4轮才找到根因，记录完整debug
+过程(不是最后一次就蒙对的，前3次方向都错了，诚实记录)**：
+
+1. 第1次猜测：Python版本太新(3.13)，conda-forge的torch/torchvision生态
+   没跟上——尝试钉`python=3.11`，**失败**：condacolab会锁死Python版本，
+   报`pin on python =3.13 ... python =3.11 is not installable`，这条路
+   根本走不通。
+2. 第2次猜测：torch/torchvision版本不匹配，卸载重装——`pip uninstall
+   torch`，**无效**：这几个包是mamba装的，conda-forge上的包名是
+   `pytorch`不是`torch`，pip从名字上就找不到它，静默跳过什么也没删。
+3. 第3次猜测：既然pip卸不掉，用`mamba remove pytorch torchvision
+   torchaudio`，**还是无效**：后来查`mamba list`真实数据才发现torch
+   是被`openff-nagl`当硬依赖拉进来的，删了也会被重新拉回来，而且
+   `torchvision`压根没被装过，删一个不存在的包自然没意义。
+4. **真实查到根因**：`mamba list`显示装了`openff-nagl`(一个ML电荷
+   预测的可选后端，带出`pytorch`+`pytorch-lightning`+`torchmetrics`)，
+   `torchmetrics`会在导入时尝试给`torchvision::nms`注册一个"假"实现，
+   但环境里从没真正装过`torchvision`，这个算子从没被注册过，所以报
+   "operator does not exist"。第4次先尝试"补装torchvision让算子真的
+   存在"，**仍然失败**(同样的报错)，说明问题比"缺一个包"更深，可能是
+   补装的torchvision build和已装的pytorch 2.10.0+cuda130这个具体build
+   在ABI上不兼容。
+5. 第5次尝试：查OpenFF官方文档确认`openff-toolkit`(完整版)会打包捆绑
+   `openff-nagl`这整条可选ML链路，`openff-toolkit-base`只装核心硬依赖，
+   改用`openff-toolkit-base`——**依然失败**：真实查`mamba list`发现
+   `openff-toolkit`(完整版)又被装回来了，说明`openmmforcefields`自己
+   硬依赖完整版`openff-toolkit`，不管我们显式请求哪个包名都绕不开，
+   `openff-nagl`跟着躲不掉。
+6. 第6次尝试：怀疑是两次分开`mamba install`导致torch/torchvision的build
+   字符串选得不一致，改成把`torchvision`和其他包放进**同一条**mamba
+   install命令里一次性解析——**还是失败**，报错一字不差。
+
+**到这里为止5-6次都是在conda安装层面猜/试，第7次换了方法：拿完整、不
+折叠的错误堆栈直接追到底，不再猜**。真实堆栈显示：`openff.toolkit`
+导入时会自动构建一个"工具箱注册表"，其中包含`NAGLToolkitWrapper`——
+它的`is_available()`方法设计上用`try/except ImportError`包住
+`importlib.import_module("openff.nagl")`，想优雅地处理"这个可选ML后端
+没装"的情况。但真实链路是：`openff.nagl`→`pytorch_lightning`→
+`torchmetrics`→`torchvision`，**torchvision自己的原生C++扩展在这个
+环境里没能正确把`torchvision::nms`这个op注册进torch的dispatcher**，
+它自己的`_meta_registrations.py`紧接着尝试给这个"应该已经注册好"的op
+再注册一个meta/fake实现时，发现op根本不存在，抛出的是`RuntimeError`，
+不是`ImportError`——`is_available()`的兜底网接的是`ImportError`，接不住
+这个`RuntimeError`，直接一路崩到最外层。
+
+**真正有效的修复，不在conda层面，在Python运行时层面**：在
+`from openff.toolkit import Molecule`之前，加两行：
+
+```python
+import sys
+sys.modules["openff.nagl"] = None
+```
+
+Python的import系统规定：`sys.modules`里某个模块名如果被设成`None`，
+之后任何对这个模块的import都会直接抛出`ImportError`(文档化的标准行为，
+不是hack)——这样`NAGLToolkitWrapper.is_available()`里的
+`importlib.import_module("openff.nagl")`会在真正触发那条broken链路
+之前就拿到一个它能正常处理的`ImportError`，干净地判定NAGL不可用，
+转而用RDKit/AmberTools这些真正要用的工具箱，不碰conda环境、不删任何
+已装的包。notebook第5步已经加上这两行。
+
+这整个坑从第1次尝试到找到真正根因，一共走了7轮——记录下来是提醒自己
+(也提醒之后看这篇文档的人)：**遇到深层依赖链路的报错，折叠过的
+traceback只够猜，真正定位问题通常需要那个没有被折叠的完整堆栈**，
+前6次尝试都是在堆栈信息不完整的情况下合理但错误的猜测。
+
+**第四个真实踩到的坑，第6步报`OpenMMException: Error loading CUDA
+module: CUDA_ERROR_UNSUPPORTED_PTX_VERSION`**：`Platform.getNumPlatforms()`
+列出了`CUDA`不代表真能用——conda装的openmm-cuda插件编译时用的CUDA版本
+比这台Colab机器实际GPU驱动支持的版本更新，插件能加载、能列出来，但真正
+建Context执行计算时才报错。**修复**：把`get_best_platform()`从"看列表
+按名字选"改成"真的建一个最小测试Context验证每个候选平台能不能用，
+第一个真能用的才返回"——CUDA真失败会自动退到OpenCL(在T4上仍然是真实
+GPU加速，只是走另一套驱动接口，不受这个PTX编译版本问题影响)。notebook
+第5步已经按这个逻辑改过。
 
 ### 不要只跑demo——第9-11步，换成用这个仓库真实筛选出来的候选分子
 
